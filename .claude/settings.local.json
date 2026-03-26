@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip show:*)",
+      "Bash(pip install:*)",
+      "Bash(\"c:/Users/SKY WALKER/OneDrive/Desktop/voice-ai-core/backend/tts/piper/piper.exe\" --help)",
+      "Bash(\"c:/Users/SKY WALKER/OneDrive/Desktop/voice-ai-core/backend/tts/piper/piper.exe\" --model \"c:/Users/SKY WALKER/OneDrive/Desktop/voice-ai-core/backend/tts/piper/models/en/en_US-lessac-medium.onnx\" --output_file - -q)",
+      "Bash(xxd:*)",
+      "Bash(.venv/Scripts/python:*)",
+      "Bash(python:*)",
+      "Bash(npm create vite@latest IVR-frontend -- --template react)",
+      "Bash(npm install)",
+      "Bash(npm install -D tailwindcss@3 postcss autoprefixer)",
+      "Bash(npm install lucide-react)",
+      "Bash(npx tailwindcss init -p)",
+      "Read(//c/Users/SKY WALKER/AppData/Local/Programs/Python/Python312/Lib/site-packages/**)",
+      "Read(//c/Users/SKY WALKER/AppData/Local/Programs/Python/Python310/lib/site-packages//**)",
+      "Bash(mkdir -p \"c:/Users/SKY WALKER/OneDrive/Desktop/Srcom/voice-ai-core/human_tts_2/static\")",
+      "Bash(mkdir -p \"c:/Users/SKY WALKER/OneDrive/Desktop/Srcom/voice-ai-core/human_tts_2/uploads/references\")",
+      "Bash(mkdir -p \"c:/Users/SKY WALKER/OneDrive/Desktop/Srcom/voice-ai-core/human_tts_2/outputs/recordings\")",
+      "Bash(mkdir -p \"c:/Users/SKY WALKER/OneDrive/Desktop/Srcom/voice-ai-core/human_tts_2/core\")",
+      "Bash(rm -rf static core app.py requirements.txt README.md .env.example dry_run_test.py __pycache__ uploads)",
+      "Bash(mkdir -p static outputs/recordings core)",
+      "Bash(venv/Scripts/pip install:*)",
+      "Bash(venv/Scripts/python -c \":*)"
+    ]
+  }
+}

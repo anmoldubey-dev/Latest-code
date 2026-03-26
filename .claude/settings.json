@@ -1,0 +1,34 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/SKY WALKER/AppData/**)",
+      "Bash(python3 -c \"import chatterbox; print\\(chatterbox.__file__\\)\")",
+      "Bash(source venv/Scripts/activate)",
+      "Bash(source ../venv/Scripts/activate)",
+      "Read(//c/Users/SKY WALKER/OneDrive/Desktop/Srcom/**)",
+      "Bash(pip3 show:*)",
+      "Bash(where pip:*)",
+      "Bash(where python:*)",
+      "Bash(\"c:/Users/SKY WALKER/AppData/Local/Programs/Python/Python310/Scripts/pip.exe\" show chatterbox-tts)",
+      "Bash(\"c:/Users/SKY WALKER/AppData/Local/Programs/Python/Python312/Scripts/pip.exe\" show chatterbox-tts)",
+      "Read(//c/Users/SKY WALKER/**)",
+      "Bash(\"c:/Users/SKY WALKER/OneDrive/Desktop/Srcom/voice-ai-core/human_tts_2/assets/README.txt\")",
+      "Bash(find 'c:\\\\Users\\\\SKY WALKER\\\\OneDrive\\\\Desktop\\\\Srcom\\\\voice-ai-core' -type f -name *.py)",
+      "Bash(find 'c:\\\\Users\\\\SKY WALKER\\\\OneDrive\\\\Desktop\\\\Srcom\\\\voice-ai-core' -type f -name *.py -not -path */.venv/*)",
+      "Read(//tmp/**)",
+      "Bash(find 'c:\\\\Users\\\\SKY WALKER\\\\OneDrive\\\\Desktop\\\\Srcom\\\\voice-ai-core' -maxdepth 3 -type f -name *.py)",
+      "Bash(\"c:/Users/SKY WALKER/OneDrive/Desktop/Srcom/voice-ai-core/human_tts/.venv/Scripts/pip.exe\" install -r \"c:/Users/SKY WALKER/OneDrive/Desktop/Srcom/voice-ai-core/human_tts/requirements.txt\")",
+      "Bash(xargs grep:*)",
+      "Bash(curl -s http://localhost:8003/health)",
+      "Bash(curl -s http://localhost:8003/languages)",
+      "Bash(curl -s -X POST http://localhost:8003/generate -H \"Content-Type: application/json\" -d '{\"\"text\"\":\"\"hey, Rohan how are you?\"\",\"\"voice_name\"\":\"\"James \\(Professional Male\\)\"\",\"\"language\"\":\"\"English\"\",\"\"emotion\"\":\"\"happy\"\"}')",
+      "Bash(pkill -f \"uvicorn app:app\")",
+      "Bash(\".venv/Scripts/python.exe\" -c \":*)",
+      "Bash(taskkill /F /IM python.exe /T)",
+      "Bash(taskkill /F /IM python3.exe /T)"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\SKY WALKER\\OneDrive\\Desktop\\Srcom\\voice-ai-core\\human_tts"
+    ]
+  }
+}

@@ -1,0 +1,107 @@
+# ================================================================
+#  Voice AI Core — .gitignore
+# ================================================================
+
+# ── Environment & Secrets ─────────────────────────────────────────
+.env
+.env.*
+*.env
+secrets.yaml
+secrets.json
+
+# ── Python Virtual Environments ───────────────────────────────────
+.venv/
+venv/
+env/
+.venv_diarization/
+services/translator_service/.venv/
+services/voice_cloner_service/.venv/
+services/diarization_service/.venv_diarization/
+services/tts_service/.venv/
+
+# ── Node Modules ──────────────────────────────────────────────────
+node_modules/
+admin-console/node_modules/
+
+# ── Build / Dist ──────────────────────────────────────────────────
+dist/
+build/
+admin-console/dist/
+admin-console/build/
+*.egg-info/
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# ── HuggingFace / Model Weights (heavy files) ─────────────────────
+# Whisper models
+*.bin
+*.pt
+*.pth
+*.gguf
+*.safetensors
+*.onnx
+*.ort
+
+# HuggingFace cache
+.cache/
+**/.cache/
+
+# Piper TTS models
+services/translator_service/tts/models/
+backend/tts/piper/models/
+**/*.onnx
+**/*.onnx.json
+
+# ── Generated / Output Files ──────────────────────────────────────
+outputs/
+recordings/
+*.wav
+*.mp3
+*.ogg
+*.flac
+backend/static/recordings/
+services/tts_service/global_tts/outputs/
+services/tts_service/indic_tts/outputs/
+services/voice_cloner_service/outputs/
+
+# ── FAISS Index ───────────────────────────────────────────────────
+backend/faiss_index/
+**/*.faiss
+**/*.pkl
+
+# ── Logs ──────────────────────────────────────────────────────────
+*.log
+logs/
+*.log.*
+
+# ── IDE & OS ──────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Jupyter ───────────────────────────────────────────────────────
+.ipynb_checkpoints/
+*.ipynb
+
+# ── pytest / coverage ─────────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# ── Vite / React ──────────────────────────────────────────────────
+admin-console/.vite/
+admin-console/coverage/
+
+# ── Misc ──────────────────────────────────────────────────────────
+*.tmp
+*.bak
+*.orig
+requirements2.txt

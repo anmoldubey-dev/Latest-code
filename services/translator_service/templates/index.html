@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Real-Time Speech Translator</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+<div class="app">
+
+  <!-- ═══════════════════════════════════════════════════════════
+       HEADER
+       ═══════════════════════════════════════════════════════════ -->
+  <header class="card header">
+    <div class="header-left">
+      <div class="logo-icon">🌐</div>
+      <div class="header-title">
+        <h1>Real-Time Speech Translator</h1>
+        <p>Bidirectional · Offline · Low-Latency</p>
+      </div>
+    </div>
+
+    <div class="status-badge" id="statusBadge">
+      <span class="status-dot"></span>
+      <span id="statusText">Idle</span>
+    </div>
+  </header>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       CONTROLS
+       ═══════════════════════════════════════════════════════════ -->
+  <section class="card controls">
+
+    <!-- Source language -->
+    <div class="lang-group">
+      <label for="srcLang">Source Language</label>
+      <select id="srcLang">
+        <option value="hi" selected>Hindi (हिन्दी)</option>
+        <option value="en">English</option>
+      </select>
+    </div>
+
+    <!-- Swap button -->
+    <button class="btn-swap" id="swapBtn" title="Swap languages">⇄</button>
+
+    <!-- Target language -->
+    <div class="lang-group">
+      <label for="tgtLang">Target Language</label>
+      <select id="tgtLang">
+        <option value="en" selected>English</option>
+        <option value="hi">Hindi (हिन्दी)</option>
+      </select>
+    </div>
+
+    <!-- Call controls -->
+    <div class="call-controls">
+      <button class="btn btn-start" id="startBtn">▶ Start Call</button>
+      <button class="btn btn-stop"  id="stopBtn" disabled>■ Stop Call</button>
+    </div>
+
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       TRANSLATION PANELS
+       ═══════════════════════════════════════════════════════════ -->
+  <div class="panels">
+
+    <!-- Left — Live Transcript -->
+    <div class="panel panel-source" id="panelSource">
+      <div class="panel-header">
+        <span class="panel-icon">🎙</span>
+        <h2>Live Transcript</h2>
+        <span class="panel-lang-tag" id="panelSrcLang">Hindi</span>
+      </div>
+      <div class="panel-body" id="transcriptBox">
+        <p class="placeholder">Your speech will appear here…</p>
+      </div>
+    </div>
+
+    <!-- Divider -->
+    <div class="panel-divider">
+      <span>→</span>
+    </div>
+
+    <!-- Right — Translation -->
+    <div class="panel panel-target" id="panelTarget">
+      <div class="panel-header">
+        <span class="panel-icon">🔊</span>
+        <h2>Translation</h2>
+        <span class="panel-lang-tag" id="panelTgtLang">English</span>
+      </div>
+      <div class="panel-body" id="translationBox">
+        <p class="placeholder">Translation will appear here…</p>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       FOOTER — latency / session info
+       ═══════════════════════════════════════════════════════════ -->
+  <footer class="card footer">
+    <div class="footer-stat">
+      <span class="footer-dot"></span>
+      <span id="footerSession">Ready</span>
+    </div>
+    <div class="footer-stat">
+      <span id="footerLast">–</span>
+    </div>
+    <div class="footer-stat" style="color:var(--text-muted); font-size:.72rem;">
+      STT: faster-whisper &nbsp;|&nbsp; NMT: Helsinki-NLP &nbsp;|&nbsp; TTS: Piper
+    </div>
+  </footer>
+
+</div><!-- /.app -->
+
+<script src="/static/script.js"></script>
+</body>
+</html>

@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SR Comsoft — Call Center AI</title>
+  <style>
+    /* ── Variables ─────────────────────────────────────────────────────── */
+    :root {
+      --bg:         #0d0f18;
+      --surface:    #14172a;
+      --surface2:   #1c2040;
+      --border:     #262b4a;
+      --accent:     #4f7ef7;
+      --accent2:    #7c3aed;
+      --success:    #22c55e;
+      --danger:     #ef4444;
+      --warning:    #f59e0b;
+      --text:       #e2e8f0;
+      --muted:      #7a86a1;
+      --user-bg:    #162a4a;
+      --user-text:  #b8d4f0;
+      --ai-bg:      #191e36;
+      --ai-text:    #c8d8f8;
+      --radius:     12px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Header ─────────────────────────────────────────────────────────── */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-shrink: 0;
+      flex-wrap: wrap;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+
+    .brand-icon {
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+
+    .brand-name  { font-size: 17px; font-weight: 700; letter-spacing: 0.2px; }
+    .brand-sub   { font-size: 12px; color: var(--muted); margin-top: 1px; }
+
+    /* ── Controls ───────────────────────────────────────────────────────── */
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .ctrl-group {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .ctrl-label {
+      font-size: 12px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    select {
+      background: var(--surface2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 7px 30px 7px 11px;
+      font-size: 13px;
+      cursor: pointer;
+      outline: none;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%237a86a1' viewBox='0 0 16 16'%3E%3Cpath d='M7.247 11.14L2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 8px center;
+      background-size: 11px;
+      min-width: 148px;
+      transition: border-color 0.15s;
+    }
+
+    select:focus { border-color: var(--accent); }
+    select:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    /* ── Buttons ─────────────────────────────────────────────────────────── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 18px;
+      border-radius: 8px;
+      border: none;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s, background 0.15s, transform 0.1s;
+      white-space: nowrap;
+    }
+
+    .btn:active:not(:disabled) { transform: scale(0.97); }
+    .btn:disabled { opacity: 0.38; cursor: not-allowed; }
+
+    .btn-start { background: var(--success); color: #fff; }
+    .btn-start:hover:not(:disabled) { background: #16a34a; }
+
+    .btn-end { background: var(--danger); color: #fff; }
+    .btn-end:hover:not(:disabled) { background: #dc2626; }
+
+    /* ── Main two-panel layout ───────────────────────────────────────────── */
+    main {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+      gap: 1px;
+      background: var(--border);
+    }
+
+    .panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg);
+      overflow: hidden;
+    }
+
+    .panel-head {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 11px 18px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .panel-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .panel-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
+    }
+
+    .panel-body::-webkit-scrollbar { width: 5px; }
+    .panel-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    /* ── Message bubbles ─────────────────────────────────────────────────── */
+    .msg {
+      max-width: 88%;
+      padding: 10px 14px;
+      border-radius: var(--radius);
+      font-size: 14px;
+      line-height: 1.65;
+      animation: fadeUp 0.18s ease;
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(7px); }
+      to   { opacity: 1; transform: translateY(0);   }
+    }
+
+    .msg-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.7px;
+      margin-bottom: 5px;
+      opacity: 0.55;
+    }
+
+    .msg-user {
+      background: var(--user-bg);
+      color: var(--user-text);
+      align-self: flex-end;
+      border-bottom-right-radius: 3px;
+    }
+
+    .msg-ai {
+      background: var(--ai-bg);
+      color: var(--ai-text);
+      align-self: flex-start;
+      border-bottom-left-radius: 3px;
+      border-left: 3px solid var(--accent);
+    }
+
+    .msg-system {
+      background: transparent;
+      border: 1px dashed var(--border);
+      color: var(--muted);
+      font-size: 12px;
+      font-style: italic;
+      align-self: center;
+      border-radius: 20px;
+      padding: 5px 14px;
+    }
+
+    .msg-timer {
+      font-size: 10px;
+      color: var(--accent);
+      opacity: 0.65;
+      margin-top: 5px;
+      display: flex;
+      align-items: center;
+      gap: 3px;
+    }
+
+    /* ── Typing dots ─────────────────────────────────────────────────────── */
+    .typing {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 10px 14px;
+      background: var(--ai-bg);
+      border-left: 3px solid var(--accent);
+      border-radius: var(--radius);
+      border-bottom-left-radius: 3px;
+      align-self: flex-start;
+    }
+
+    .typing span {
+      width: 6px;
+      height: 6px;
+      background: var(--accent);
+      border-radius: 50%;
+      animation: dotBounce 1.3s infinite;
+    }
+    .typing span:nth-child(2) { animation-delay: 0.18s; }
+    .typing span:nth-child(3) { animation-delay: 0.36s; }
+
+    @keyframes dotBounce {
+      0%, 60%, 100% { transform: translateY(0);    opacity: 0.7; }
+      30%            { transform: translateY(-7px); opacity: 1;   }
+    }
+
+    /* ── Empty state ─────────────────────────────────────────────────────── */
+    .empty {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      font-size: 13px;
+      gap: 10px;
+      text-align: center;
+    }
+    .empty-icon { font-size: 34px; opacity: 0.3; }
+
+    /* ── Status bar ──────────────────────────────────────────────────────── */
+    footer {
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      padding: 9px 22px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+      color: var(--muted);
+      flex-shrink: 0;
+      gap: 12px;
+    }
+
+    .status-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .sdot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--muted);
+      flex-shrink: 0;
+    }
+
+    /* State animations */
+    .sdot.idle     { background: var(--muted); }
+    .sdot.ready    { background: var(--success); animation: blink 2s infinite; }
+    .sdot.thinking { background: var(--warning); animation: blink 0.7s infinite; }
+    .sdot.playing  { background: var(--accent2); animation: blink 0.5s infinite; }
+    .sdot.error    { background: var(--danger); }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.35; }
+    }
+
+    /* ── Mic ring ────────────────────────────────────────────────────────── */
+    .mic-ring {
+      display: none;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      border: 2px solid var(--success);
+      animation: ripple 1.4s ease-out infinite;
+    }
+
+    @keyframes ripple {
+      0%   { transform: scale(1);   opacity: 1; }
+      100% { transform: scale(2.5); opacity: 0; }
+    }
+
+    .mic-ring.active { display: inline-block; }
+
+    /* ── Per-message audio player ────────────────────────────────────────── */
+    .msg-audio {
+      margin-top: 8px;
+      width: 100%;
+    }
+
+    .msg-audio audio {
+      width: 100%;
+      height: 28px;
+      border-radius: 6px;
+      accent-color: var(--accent);
+      background: rgba(0,0,0,0.25);
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════ HEADER ═══════ -->
+<header>
+  <div class="brand">
+    <div class="brand-icon">📞</div>
+    <div>
+      <div class="brand-name">SR Comsoft</div>
+      <div class="brand-sub">Call Center AI</div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="ctrl-group">
+      <span class="ctrl-label">Language</span>
+      <select id="sel-lang">
+        <option value="">Loading…</option>
+      </select>
+    </div>
+
+    <div class="ctrl-group">
+      <span class="ctrl-label">Voice / Agent</span>
+      <select id="sel-voice">
+        <option value="">Loading…</option>
+      </select>
+    </div>
+
+    <div class="ctrl-group">
+      <span class="ctrl-label">AI Model</span>
+      <select id="sel-llm">
+        <option value="gemini">⚡ Gemini Flash</option>
+        <option value="qwen">🦙 Qwen 2.5 7B</option>
+      </select>
+    </div>
+
+    <button class="btn btn-start" id="btn-start" onclick="startCall()">
+      📞 Start Call
+    </button>
+    <button class="btn btn-end" id="btn-end" disabled onclick="endCall()">
+      📵 End Call
+    </button>
+  </div>
+</header>
+
+<!-- ═══════════════════════════════════════════════════════ MAIN ══════════ -->
+<main>
+  <!-- Left — live transcript -->
+  <div class="panel" id="left-panel">
+    <div class="panel-head">
+      <div class="panel-dot" style="background:var(--accent)"></div>
+      Live Transcript
+    </div>
+    <div class="panel-body" id="tx-body">
+      <div class="empty" id="tx-empty">
+        <div class="empty-icon">🎤</div>
+        <div>Your speech will appear here</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right — AI responses -->
+  <div class="panel" id="right-panel">
+    <div class="panel-head">
+      <div class="panel-dot" style="background:var(--accent2)"></div>
+      Agent Response
+    </div>
+    <div class="panel-body" id="ai-body">
+      <div class="empty" id="ai-empty">
+        <div class="empty-icon">🤖</div>
+        <div>Agent responses will appear here</div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- ═══════════════════════════════════════════════════════ FOOTER ════════ -->
+<footer>
+  <div class="status-row">
+    <div class="sdot idle" id="sdot"></div>
+    <div class="mic-ring" id="mic-ring"></div>
+    <span id="status-txt">Ready — select language and AI model, then click Start Call</span>
+  </div>
+  <div id="agent-tag" style="font-weight:600;color:var(--accent)"></div>
+</footer>
+
+<!-- ═══════════════════════════════════════════════════════ SCRIPT ════════ -->
+<script>
+'use strict';
+
+/* ─── AudioWorklet processor (runs in dedicated audio thread) ────────────── */
+const WORKLET_CODE = `
+class PCMProcessor extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    this._buf   = [];
+    this._ratio = sampleRate / 16000;  /* downsample to 16 kHz */
+    this._pos   = 0;
+  }
+  process(inputs) {
+    const ch = inputs[0]?.[0];
+    if (!ch) return true;
+    while (this._pos < ch.length) {
+      this._buf.push(ch[Math.floor(this._pos)]);
+      this._pos += this._ratio;
+    }
+    this._pos -= ch.length;
+    if (this._buf.length >= 1600) {          /* flush every 100 ms */
+      this.port.postMessage(new Float32Array(this._buf.splice(0, 1600)));
+    }
+    return true;
+  }
+}
+registerProcessor('pcm-proc', PCMProcessor);
+`;
+
+/* ─── State ──────────────────────────────────────────────────────────────── */
+let ws         = null;
+let capCtx     = null;   // capture AudioContext
+let srcNode    = null;
+let worklet    = null;
+let micStream  = null;
+let sending    = false;  // starts false — only enabled after greeting finishes playing
+let callActive = false;
+
+/* ─── Per-message audio player ───────────────────────────────────────────── */
+// Each AI message bubble gets its own <audio controls> player.
+// The currently-playing element is tracked for barge-in.
+let _activeAudioEl = null;   // <audio> element currently playing
+
+function _onAudioEnded() {
+  isSpeaking     = false;
+  currentSrc     = null;
+  _activeAudioEl = null;
+  sending        = true;
+  if (callActive) setStatus('ready', 'Listening…');
+}
+let agentName  = 'Agent';
+let tTurnStart = null;   // timestamp when transcript received — for response timer
+
+/* ─── Barge-in state ─────────────────────────────────────────────────────── */
+let currentSrc         = null;   // active AudioBufferSourceNode (so we can stop it)
+let isSpeaking         = false;  // true while AI audio is playing
+const BARGE_RMS        = 0.04;   // speech RMS is 0.03-0.07; raise to 0.06 if wind still triggers
+const BARGE_MIN_FRAMES = 4;      // consecutive frames above threshold (~400 ms at 100 ms/frame)
+let bargeInFrames      = 0;      // rolling consecutive-frame counter
+
+/* ─── Helpers ────────────────────────────────────────────────────────────── */
+const $ = id => document.getElementById(id);
+
+function setStatus(state, text) {
+  $.call(null, 'sdot').className = `sdot ${state}`;
+  $.call(null, 'status-txt').textContent = text;
+  $.call(null, 'mic-ring').className = 'mic-ring' + (state === 'ready' ? ' active' : '');
+}
+
+function clearEmptyState(bodyId, emptyId) {
+  const e = $(emptyId);
+  if (e) e.remove();
+}
+
+function addMsg(bodyId, text, type, label, elapsedSec, audioB64) {
+  const body = $(bodyId);
+  const el = document.createElement('div');
+  el.className = `msg msg-${type}`;
+  if (label) {
+    const lbl = document.createElement('div');
+    lbl.className = 'msg-label';
+    lbl.textContent = label;
+    el.appendChild(lbl);
+  }
+  const p = document.createElement('div');
+  p.textContent = text;
+  el.appendChild(p);
+  if (elapsedSec != null) {
+    const t = document.createElement('div');
+    t.className = 'msg-timer';
+    t.textContent = `⚡ ${elapsedSec}s`;
+    el.appendChild(t);
+  }
+  // ── Embed audio player if audio is provided ──────────────────────────────
+  if (audioB64) {
+    try {
+      const bytes   = Uint8Array.from(atob(audioB64), c => c.charCodeAt(0));
+      const blob    = new Blob([bytes], { type: 'audio/wav' });
+      const url     = URL.createObjectURL(blob);
+      const wrapper = document.createElement('div');
+      wrapper.className = 'msg-audio';
+      const audio = document.createElement('audio');
+      audio.controls  = true;
+      audio.src       = url;
+      audio.dataset.blobUrl = url;   // remember for cleanup
+      wrapper.appendChild(audio);
+      el.appendChild(wrapper);
+    } catch (e) {
+      console.warn('[addMsg] audio embed failed:', e.message);
+    }
+  }
+  body.appendChild(el);
+  body.scrollTop = body.scrollHeight;
+  return el;   // return so caller can grab the embedded <audio>
+}
+
+function showTyping(bodyId) {
+  if ($(bodyId).querySelector('.typing')) return;
+  const el = document.createElement('div');
+  el.className = 'typing';
+  el.innerHTML = '<span></span><span></span><span></span>';
+  $(bodyId).appendChild(el);
+  $(bodyId).scrollTop = $(bodyId).scrollHeight;
+}
+
+function hideTyping(bodyId) {
+  const el = $(bodyId).querySelector('.typing');
+  if (el) el.remove();
+}
+
+/* ─── Barge-in handler ───────────────────────────────────────────────────── */
+function bargeIn() {
+  if (!isSpeaking || !callActive) return;
+
+  bargeInFrames = 0;
+
+  /* Pause the currently-playing per-message audio element */
+  if (_activeAudioEl) {
+    try { _activeAudioEl.pause(); } catch {}
+    _activeAudioEl = null;
+  }
+
+  currentSrc = null;
+  isSpeaking = false;
+  sending    = true;
+
+  if (ws?.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'interrupt' }));
+  }
+
+  setStatus('ready', 'Listening…');
+  addMsg('tx-body', '[ interrupted ]', 'system', null);
+}
+
+/* ─── Playback ───────────────────────────────────────────────────────────── */
+function playMsgAudio(msgEl) {
+  const audio = msgEl?.querySelector('audio');
+  if (!audio) {
+    // No audio in this message — just enable mic
+    sending    = true;
+    isSpeaking = false;
+    if (callActive) setStatus('ready', 'Listening…');
+    return;
+  }
+
+  sending        = false;
+  isSpeaking     = true;
+  _activeAudioEl = audio;
+  setStatus('playing', `${agentName} is speaking…`);
+
+  audio.addEventListener('ended', _onAudioEnded, { once: true });
+  audio.play().catch(() => {
+    // Autoplay blocked — mic stays paused but user can click ▶ manually
+    setStatus('ready', `Click ▶ to hear ${agentName}`);
+    sending        = true;
+    isSpeaking     = false;
+    _activeAudioEl = null;
+  });
+}
+
+/* ─── Call start ─────────────────────────────────────────────────────────── */
+async function startCall() {
+  if (callActive) return;
+
+  const lang      = $('sel-lang').value;
+  const voiceName = $('sel-voice').value;
+  const llmKey    = $('sel-llm').value;
+
+  /* Lock controls */
+  $('btn-start').disabled   = true;
+  $('sel-lang').disabled    = true;
+  $('sel-voice').disabled   = true;
+  $('sel-llm').disabled     = true;
+  setStatus('thinking', 'Connecting…');
+
+  /* Clear panels */
+  $('tx-body').innerHTML = '';
+  $('ai-body').innerHTML = '';
+
+  /* Mic */
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+  } catch {
+    alert('Microphone access denied. Please allow microphone access and reload.');
+    resetUI();
+    return;
+  }
+
+  /* AudioWorklet */
+  capCtx = new AudioContext({ sampleRate: 48000 });
+  const blob = new Blob([WORKLET_CODE], { type: 'application/javascript' });
+  const url  = URL.createObjectURL(blob);
+  await capCtx.audioWorklet.addModule(url);
+  URL.revokeObjectURL(url);
+
+  srcNode = capCtx.createMediaStreamSource(micStream);
+  worklet  = new AudioWorkletNode(capCtx, 'pcm-proc');
+  worklet.port.onmessage = e => {
+    const pcmChunk = e.data;
+
+    /* ── Barge-in detection: measure RMS even when AI is speaking ── */
+    if (!sending && isSpeaking && callActive) {
+      let sum = 0;
+      for (let i = 0; i < pcmChunk.length; i++) sum += pcmChunk[i] * pcmChunk[i];
+      const rms = Math.sqrt(sum / pcmChunk.length);
+
+      if (rms > BARGE_RMS) {
+        bargeInFrames++;
+        /* Require BARGE_MIN_FRAMES consecutive loud frames (~200 ms) before
+           treating it as real speech — single noise spikes / wind pops ignored */
+        if (bargeInFrames >= BARGE_MIN_FRAMES) {
+          bargeInFrames = 0;
+          bargeIn();
+          return;  // bargeIn() sets sending=true; next frame will be forwarded normally
+        }
+      } else {
+        bargeInFrames = 0;  // reset streak on any quiet frame
+      }
+      return;  // still in AI-speaking window — don't forward mic audio yet
+    }
+
+    /* Not in AI-speaking window — reset the counter */
+    bargeInFrames = 0;
+
+    if (ws?.readyState === WebSocket.OPEN && sending && callActive) {
+      ws.send(pcmChunk.buffer);
+    }
+  };
+  srcNode.connect(worklet);
+
+  /* WebSocket */
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(`${proto}//${location.host}/ws/call`);
+  ws.binaryType = 'arraybuffer';
+
+  ws.onopen = () => {
+    ws.send(JSON.stringify({ type: 'init', lang, voice: voiceName, llm: llmKey }));
+    callActive = true;
+    $('btn-end').disabled = false;
+    setStatus('thinking', 'Connecting…');
+  };
+
+  ws.onmessage = async evt => {
+    let data;
+    try { data = JSON.parse(evt.data); }
+    catch { return; }
+
+    if (data.type === 'greeting') {
+      /* Server tells us the resolved agent name */
+      agentName = data.agent_name || agentName;
+      $('agent-tag').textContent =
+        `${agentName}  ·  ${llmKey === 'gemini' ? 'Gemini Flash' : 'Qwen 2.5 7B'}`;
+      clearEmptyState('ai-body', 'ai-empty');
+      const greetEl = addMsg('ai-body', data.text, 'ai', agentName, null, data.audio || null);
+      if (data.audio) {
+        playMsgAudio(greetEl);
+      } else {
+        sending = true;
+        setStatus('ready', 'Listening…');
+      }
+    }
+
+    else if (data.type === 'transcript') {
+      tTurnStart = Date.now();
+      clearEmptyState('tx-body', 'tx-empty');
+      hideTyping('tx-body');
+      addMsg('tx-body', data.text, 'user', 'You');
+      clearEmptyState('ai-body', 'ai-empty');
+      showTyping('ai-body');
+      setStatus('thinking', `${agentName} is thinking…`);
+    }
+
+    else if (data.type === 'response') {
+      const elapsed = tTurnStart ? ((Date.now() - tTurnStart) / 1000).toFixed(1) : null;
+      tTurnStart = null;
+      hideTyping('ai-body');
+      const respEl = addMsg('ai-body', data.text, 'ai', agentName, elapsed, data.audio || null);
+      if (data.audio) {
+        playMsgAudio(respEl);
+      } else {
+        if (callActive) setStatus('ready', 'Listening…');
+      }
+    }
+  };
+
+  ws.onclose = () => {
+    if (callActive) addMsg('ai-body', 'Call ended.', 'system', null);
+    resetUI();
+  };
+
+  ws.onerror = () => {
+    addMsg('ai-body', 'Connection error. Please try again.', 'system', null);
+    endCall();
+  };
+}
+
+/* ─── Call end ───────────────────────────────────────────────────────────── */
+function endCall() {
+  if (ws?.readyState === WebSocket.OPEN) {
+    try { ws.send(JSON.stringify({ type: 'end' })); } catch {}
+    setTimeout(() => ws?.close(), 300);
+  } else {
+    ws?.close();
+  }
+  callActive = false;
+  resetUI();
+}
+
+/* ─── Language display names ─────────────────────────────────────────────── */
+const LANG_LABELS = {
+  // Global TTS (port 8003)
+  en:      '🇬🇧 English',
+  fr:      '🇫🇷 French',
+  de:      '🇩🇪 German',
+  es:      '🇪🇸 Spanish',
+  pt:      '🇵🇹 Portuguese',
+  pl:      '🇵🇱 Polish',
+  it:      '🇮🇹 Italian',
+  nl:      '🇳🇱 Dutch',
+  // Indic TTS (port 8004)
+  hi:      '🇮🇳 Hindi',
+  'en-in': '🇮🇳 English (Indian)',
+  mr:      '🇮🇳 Marathi',
+  bn:      '🇧🇩 Bengali',
+  ta:      '🇮🇳 Tamil',
+  te:      '🇮🇳 Telugu',
+  gu:      '🇮🇳 Gujarati',
+  kn:      '🇮🇳 Kannada',
+  ml:      '🇮🇳 Malayalam',
+  pa:      '🇮🇳 Punjabi',
+  or:      '🇮🇳 Odia',
+  as:      '🇮🇳 Assamese',
+  ur:      '🇵🇰 Urdu',
+  // Other
+  ar:      '🇸🇦 Arabic',
+  ru:      '🇷🇺 Russian',
+  ne:      '🇳🇵 Nepali',
+  zh:      '🇨🇳 Chinese',
+};
+
+/* ─── Derive a short readable name from a voice stem ────────────────────── */
+/* "en_US-lessac-medium" → "Lessac (US)"  |  "hi_IN-pratham-medium" → "Pratham (IN)" */
+function voiceLabel(stem) {
+  const parts = stem.split('-');
+  if (parts.length < 2) return stem;
+  const region = parts[0].split('_')[1] || '';
+  const name   = parts[1].replace(/_/g, ' ');
+  const cap    = name.charAt(0).toUpperCase() + name.slice(1);
+  return region ? `${cap} (${region})` : cap;
+}
+
+/* ─── Populate voice dropdown for a given language ───────────────────────── */
+let _voiceRegistry = {};
+
+function populateVoices(lang) {
+  const sel    = $('sel-voice');
+  const voices = _voiceRegistry[lang] || [];
+  sel.innerHTML = '';
+  if (voices.length === 0) {
+    sel.innerHTML = '<option value="">— no voices —</option>';
+    return;
+  }
+  voices.forEach(v => {
+    const opt   = document.createElement('option');
+    opt.value   = v.name;
+    opt.textContent = voiceLabel(v.name);
+    sel.appendChild(opt);
+  });
+}
+
+/* ─── Fetch /api/voices and wire up the language → voice cascade ─────────── */
+(async () => {
+  try {
+    const res = await fetch('/api/voices');
+    _voiceRegistry = await res.json();
+  } catch (e) {
+    console.warn('[voices] Could not load voice registry:', e);
+    _voiceRegistry = {};
+  }
+
+  const langSel = $('sel-lang');
+  langSel.innerHTML = '';
+
+  const langs = Object.keys(_voiceRegistry).sort();
+  if (langs.length === 0) {
+    langSel.innerHTML = '<option value="en">English</option>';
+  } else {
+    langs.forEach(lang => {
+      const opt = document.createElement('option');
+      opt.value = lang;
+      opt.textContent = LANG_LABELS[lang] || lang.toUpperCase();
+      langSel.appendChild(opt);
+    });
+    /* Default to English if available */
+    if (_voiceRegistry['en']) langSel.value = 'en';
+  }
+
+  /* Populate voice dropdown for initial language */
+  populateVoices(langSel.value);
+
+  /* Re-populate voices when language changes */
+  langSel.addEventListener('change', () => populateVoices(langSel.value));
+})();
+
+function resetUI() {
+  callActive    = false;
+  sending       = true;
+  isSpeaking    = false;
+  currentSrc    = null;
+  bargeInFrames = 0;
+
+  $('btn-start').disabled   = false;
+  $('btn-end').disabled     = true;
+  $('sel-lang').disabled    = false;
+  $('sel-voice').disabled   = false;
+  $('sel-llm').disabled     = false;
+  $('agent-tag').textContent = '';
+
+  setStatus('idle', 'Ready — select language, voice and AI model, then click Start Call');
+
+  /* Cleanup per-message audio player */
+  if (_activeAudioEl) {
+    try { _activeAudioEl.pause(); } catch {}
+    _activeAudioEl = null;
+  }
+  /* Revoke any blob URLs still in the DOM */
+  document.querySelectorAll('audio[data-blob-url]').forEach(a => {
+    try { URL.revokeObjectURL(a.dataset.blobUrl); } catch {}
+  });
+
+  /* Cleanup mic */
+  try { worklet?.disconnect(); srcNode?.disconnect(); } catch {}
+  try { capCtx?.close(); } catch {}
+  try { micStream?.getTracks().forEach(t => t.stop()); } catch {}
+
+  ws = null; capCtx = null; worklet = null;
+  srcNode = null; micStream = null;
+}
+</script>
+</body>
+</html>
