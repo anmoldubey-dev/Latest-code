@@ -10,7 +10,7 @@
 # | * parse name from voice     |
 # +-----------------------------+
 #     |
-#     |----> split() / strip()
+#     |----> split()
 #     |        * extract from "Name (Role)" format
 #     |      OR
 #     |----> title()
@@ -41,11 +41,15 @@
 #     |        * fill name into template
 #     |
 #     v
-# [ RETURN greeting string ]
+# [ RETURN str ]
 #
 # ================================================================
 
+import logging
+
 from backend.core.config import BASE_PERSONA, LANGUAGE_CONFIG, NATIVE_AGENT_NAMES
+
+logger = logging.getLogger(__name__)
 
 
 def extract_agent_name(voice_stem: str) -> str:

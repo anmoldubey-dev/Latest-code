@@ -57,14 +57,15 @@ logger = logging.getLogger(__name__)
 
 MODEL_NAME = "facebook/m2m100_418M"
 
-# Resolved snapshot path — avoids any HuggingFace network call on startup
-_HF_CACHE = os.path.join(
+# Model resolution: project models/ → HF cache → HF download
+_PROJ      = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+_LOCAL     = os.path.join(_PROJ, "models", "m2m100_418M")
+_HF_CACHE  = os.path.join(
     os.path.expanduser("~"), ".cache", "huggingface", "hub",
     "models--facebook--m2m100_418M", "snapshots",
     "55c2e61bbf05dfb8d7abccdc3fae6fc8512fd636",
 )
-# Fallback to hub identifier if snapshot not present (first run)
-_MODEL_PATH = _HF_CACHE if os.path.isdir(_HF_CACHE) else MODEL_NAME
+_MODEL_PATH = _LOCAL if os.path.isdir(_LOCAL) else (_HF_CACHE if os.path.isdir(_HF_CACHE) else MODEL_NAME)
 
 
 class TranslatorEngine:

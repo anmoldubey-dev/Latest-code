@@ -10,7 +10,8 @@
 # | * hash plain text password       |
 # +----------------------------------+
 #     |
-#     |----> <pwd_ctx> -> hash()      * sha256_crypt hash
+#     |----> <pwd_ctx> -> hash()
+#     |        * bcrypt hash password
 #     |
 #     v
 # +----------------------------------+
@@ -18,7 +19,8 @@
 # | * compare plain and hashed       |
 # +----------------------------------+
 #     |
-#     |----> <pwd_ctx> -> verify()    * sha256_crypt verify
+#     |----> <pwd_ctx> -> verify()
+#     |        * verify password hash
 #     |
 #     v
 # +----------------------------------+
@@ -26,9 +28,8 @@
 # | * build signed HS256 JWT         |
 # +----------------------------------+
 #     |
-#     |----> <jwt> -> encode()        * sign with SECRET_KEY
-#     |
-#     |----> exp claim                * set token expiry
+#     |----> <jwt> -> encode()
+#     |        * sign with SECRET_KEY
 #     |
 #     v
 # +----------------------------------+
@@ -36,7 +37,8 @@
 # | * verify and decode JWT          |
 # +----------------------------------+
 #     |
-#     |----> <jwt> -> decode()        * verify with SECRET_KEY
+#     |----> <jwt> -> decode()
+#     |        * verify with SECRET_KEY
 #     |
 #     v
 # +----------------------------------+
@@ -44,9 +46,11 @@
 # | * verify username and password   |
 # +----------------------------------+
 #     |
-#     |----> <db> -> query()          * lookup User by username
+#     |----> <db> -> query()
+#     |        * lookup User by username
 #     |
-#     |----> verify_password()        * compare password hash
+#     |----> verify_password()
+#     |        * compare password hash
 #     |
 #     v
 # +----------------------------------+
@@ -54,9 +58,11 @@
 # | * decode JWT fetch user          |
 # +----------------------------------+
 #     |
-#     |----> decode_token()           * decode bearer token
+#     |----> decode_token()
+#     |        * decode bearer token
 #     |
-#     |----> <db> -> query()          * fetch User by id
+#     |----> <db> -> query()
+#     |        * fetch User by id
 #     |
 #     v
 # +----------------------------------+
@@ -64,15 +70,17 @@
 # | * enforce admin role guard       |
 # +----------------------------------+
 #     |
-#     |----> get_current_user()       * resolve current user
-#     |
-#     |----> check role == "admin"    * raise 403 if not admin
+#     |----> get_current_user()
+#     |        * resolve current user
 #
 # ================================================================
 
+import logging
 import os
 from datetime import datetime, timedelta
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -119,7 +127,9 @@ def decode_token(token: str) -> dict:
 def authenticate_user(db: Session, username: str, password: str) -> Optional[User]:
     user = db.query(User).filter(User.username == username, User.is_active == True).first()
     if not user or not verify_password(password, user.hashed_password):
+        logger.warning("[auth_service] failed login attempt  username=%s", username)
         return None
+    logger.info("[auth_service] user authenticated  username=%s  role=%s", username, user.role)
     return user
 
 

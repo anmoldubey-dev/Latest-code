@@ -10,17 +10,14 @@
 # | * ORM model for calls table   |
 # +-------------------------------+
 #     |
-#     |----> caller_number        * incoming caller ID column
+#     |----> relationship()
+#     |        * resolve Agent ORM
 #     |
-#     |----> agent_id             * FK to agents table
+#     |----> relationship()
+#     |        * list of CallRoutes
 #     |
-#     |----> status               * dialing/connected/ended etc.
-#     |
-#     |----> <relationship> -> Agent()         * resolve agent ORM
-#     |
-#     |----> <relationship> -> CallRoute()     * list of call routes
-#     |
-#     |----> <relationship> -> Transcript()    * ordered transcripts
+#     |----> relationship()
+#     |        * ordered Transcripts
 #
 # ================================================================
 

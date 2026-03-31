@@ -10,15 +10,14 @@
 # | * POST /auth/login issue JWT     |
 # +----------------------------------+
 #     |
-#     |----> <auth_service> -> authenticate_user()  * verify username and password
-#     |           |
-#     |           |----> <db> -> query()             * lookup User by username
-#     |           |
-#     |           |----> verify_password()           * compare password hash
+#     |----> authenticate_user()
+#     |        * verify username and password
 #     |
-#     |----> <auth_service> -> create_token()        * sign HS256 JWT
+#     |----> create_token()
+#     |        * sign HS256 JWT
 #     |
-#     |----> return TokenResponse()                  * access_token and role
+#     |----> <TokenResponse> -> __init__()
+#     |        * build access_token response
 #     |
 #     v
 # +----------------------------------+
@@ -26,14 +25,20 @@
 # | * GET /auth/me current profile   |
 # +----------------------------------+
 #     |
-#     |----> <auth_service> -> get_current_user()   * decode JWT bearer token
+#     |----> get_current_user()
+#     |        * decode JWT bearer token
 #     |
-#     |----> return UserResponse()                  * id name email role
+#     |----> <UserResponse> -> __init__()
+#     |        * build profile response
 #
 # ================================================================
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 from ..database.connection import get_db
 from ..schemas.auth import LoginRequest, TokenResponse, UserResponse
@@ -47,11 +52,13 @@ router = APIRouter(tags=["auth"])
 def login(req: LoginRequest, db: Session = Depends(get_db)):
     user = authenticate_user(db, req.username, req.password)
     if not user:
+        logger.warning("[auth route] login failed  username=%s", req.username)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password",
         )
     token = create_token(user.id, user.username, user.role)
+    logger.info("[auth route] login success  username=%s  role=%s", user.username, user.role)
     return TokenResponse(
         access_token=token,
         token_type="bearer",

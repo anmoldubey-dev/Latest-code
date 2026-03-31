@@ -26,7 +26,7 @@
 #     |        * write PCM to ring
 #     |
 #     |----> _drain_idle_into_chunks()
-#     |        * snapshot ring on activation
+#     |        * snapshot ring on voice start
 #     |
 #     v
 # +-----------------------------+
@@ -48,10 +48,13 @@
 #
 # ================================================================
 
+import logging
 import time
 from typing import List, Optional
 
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 
 class AudioBuf:
@@ -93,6 +96,7 @@ class AudioBuf:
         # Latency telemetry
         self._last_push_t:  float = 0.0
         self._active_since: float = 0.0
+        self._last_voice_t: float = 0.0   # time of most recent voice frame
 
     # ------------------------------------------------------------------
     # Adaptive noise calibration
@@ -182,6 +186,7 @@ class AudioBuf:
 
         if is_speech_frame:
             self._voice_frame_count += 1
+            self._last_voice_t       = time.perf_counter()
             self._speech += len(pcm)
             self._sil    = 0
             # Activate after MIN_VOICE_FRAMES consecutive voice frames
@@ -204,10 +209,17 @@ class AudioBuf:
             self._idle_push(pcm)
 
     def ready(self) -> bool:
-        real_speech = self._speech / self.SR
-        silence     = self._sil    / self.SR
-        overlong    = self._total  / self.SR >= self.MAX_SECS
-        return real_speech >= self.MIN_SPEECH and (silence >= self.SILENCE_SECS or overlong)
+        real_speech  = self._speech / self.SR
+        silence      = self._sil    / self.SR
+        overlong     = self._total  / self.SR >= self.MAX_SECS
+        # Time-based silence: active + no voice frame for SILENCE_SECS (works in noisy rooms
+        # where RMS-based silence never clears the threshold)
+        timed_out    = (
+            self._active
+            and self._last_voice_t > 0
+            and (time.perf_counter() - self._last_voice_t) >= self.SILENCE_SECS
+        )
+        return real_speech >= self.MIN_SPEECH and (silence >= self.SILENCE_SECS or overlong or timed_out)
 
     def flush(self) -> Optional[np.ndarray]:
         parts: List[np.ndarray] = []
@@ -233,6 +245,7 @@ class AudioBuf:
         self._voice_frame_count = 0
         self._idle_write        = 0
         self._active_since      = 0.0
+        self._last_voice_t      = 0.0
         return arr
 
     def stats(self) -> dict:

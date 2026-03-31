@@ -14,7 +14,7 @@
 #    |        * set room join permissions
 #    |
 #    |----> <AccessToken> -> __init__()
-#    |        * init with API key and secret
+#    |        * init with API key/secret
 #    |
 #    |----> <AccessToken> -> with_identity()
 #    |        * set participant identity
@@ -33,7 +33,10 @@
 #
 # ================================================================
 
+import logging
 import os
+
+logger = logging.getLogger(__name__)
 
 LIVEKIT_URL        = os.getenv("LIVEKIT_URL",        "ws://localhost:7880")
 LIVEKIT_API_KEY    = os.getenv("LIVEKIT_API_KEY",    "devkey")
@@ -64,4 +67,5 @@ def generate_token(
         .with_grants(grants)
         .to_jwt()
     )
+    logger.debug("[token_service] JWT generated  room=%s  identity=%s", room_name, identity)
     return token

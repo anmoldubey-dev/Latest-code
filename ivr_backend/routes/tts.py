@@ -10,11 +10,8 @@
 # | * scan ONNX models on disk       |
 # +----------------------------------+
 #     |
-#     |----> <_MODELS_DIR> -> rglob()   * find all .onnx files
-#     |
-#     |----> apply _LANG_FALLBACK       * mr shares hi model
-#     |
-#     |----> return registry dict       * lang to voice list
+#     |----> rglob()
+#     |        * find all .onnx files
 #     |
 #     v
 # +----------------------------------+
@@ -22,9 +19,8 @@
 # | * GET /tts/voices voice registry |
 # +----------------------------------+
 #     |
-#     |----> _build_registry()          * scan ONNX models
-#     |
-#     |----> return dict                * lang to voice names
+#     |----> _build_registry()
+#     |        * scan ONNX models
 #     |
 #     v
 # +----------------------------------+
@@ -32,20 +28,15 @@
 # | * POST /tts/generate WAV bytes   |
 # +----------------------------------+
 #     |
-#     |----> <tts_service> -> generate_speech()  * run Piper subprocess
-#     |           |
-#     |           |----> <voice_mapper> -> get_model_key()  * lang to model key
-#     |           |
-#     |           |----> _resolve_model()                   * key to onnx path
-#     |           |
-#     |           |----> <loop> -> run_in_executor()        * offload to thread pool
-#     |                       |
-#     |                       |----> _piper_sync()          * blocking subprocess call
+#     |----> generate_speech()
+#     |        * run Piper subprocess
 #     |
-#     |----> return Response()          * stream audio/wav bytes
+#     |----> <Response> -> __init__()
+#     |        * stream audio/wav bytes
 #
 # ================================================================
 
+import logging
 from pathlib import Path
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
@@ -53,6 +44,8 @@ from pydantic import BaseModel
 from typing import Optional
 
 from ..services.tts_service import generate_speech
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["tts"])
 
@@ -96,6 +89,8 @@ async def tts_generate(req: TTSRequest):
         raise HTTPException(status_code=422, detail="text is required")
     try:
         wav = await generate_speech(req.text, req.language or "English", req.model_path)
+        logger.debug("[tts route] generated  lang=%s  bytes=%d", req.language, len(wav))
     except Exception as exc:
+        logger.error("[tts route] generate error: %s", exc)
         raise HTTPException(status_code=500, detail=f"TTS error: {exc}")
     return Response(content=wav, media_type="audio/wav")

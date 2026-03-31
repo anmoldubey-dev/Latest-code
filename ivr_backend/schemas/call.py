@@ -10,23 +10,17 @@
 # | * POST /calls/start request body |
 # +----------------------------------+
 #     |
-#     |----> caller_number / agent_id / department  * call init fields
-#     |
 #     v
 # +----------------------------------+
 # | TransferRequest()                |
 # | * POST /calls/{id}/transfer body |
 # +----------------------------------+
 #     |
-#     |----> to_agent_id / to_department / action_type  * transfer fields
-#     |
 #     v
 # +----------------------------------+
 # | CallRouteResponse()              |
-# | * serialized route in responses  |
+# | * serialized route response      |
 # +----------------------------------+
-#     |
-#     |----> id / from_department / to_department / action_type / routed_at
 #     |
 #     v
 # +----------------------------------+
@@ -34,11 +28,8 @@
 # | * full call data response model  |
 # +----------------------------------+
 #     |
-#     |----> from_orm_with_agent()    * build response from ORM Call
-#                 |
-#                 |----> agent_name   * resolved from Call.agent
-#                 |
-#                 |----> routes       * List[CallRouteResponse]
+#     |----> from_orm_with_agent()
+#     |        * build response from ORM Call
 #
 # ================================================================
 

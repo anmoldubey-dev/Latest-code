@@ -10,16 +10,8 @@
 # | * ORM model for transcripts table    |
 # +--------------------------------------+
 #     |
-#     |----> call_id              * FK to calls table
-#     |
-#     |----> speaker              * agent / caller / system
-#     |
-#     |----> text                 * transcribed speech content
-#     |
-#     |----> created_at           * timestamp of turn
-#     |
-#     |----> <relationship> -> Call()   * back-populates Call.transcripts
-#                                         ordered by created_at ascending
+#     |----> relationship()
+#     |        * back-populates Call.transcripts
 #
 # ================================================================
 

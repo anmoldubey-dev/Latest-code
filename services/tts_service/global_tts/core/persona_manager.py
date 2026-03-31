@@ -16,10 +16,10 @@
 # | * compose Parler TTS prompt   |
 # +-------------------------------+
 #    |
-#    |----> VOICES.get()
+#    |----> get()
 #    |        * fetch voice profile dict
 #    |
-#    |----> PRESETS.get()
+#    |----> get()
 #    |        * fetch emotion style text
 #    |
 #    v
@@ -31,9 +31,8 @@
 #    |----> build_description()
 #    |        * assemble description string
 #    |
-#    |----> tokenizer()
+#    |----> <Tokenizer> -> __call__()
 #    |        * encode to input tensor on cache miss
-#    |      OR return cached tuple on hit
 #    |
 #    v
 # +-------------------------------+
@@ -42,7 +41,7 @@
 # +-------------------------------+
 #    |
 #    |----> voices_for_language()
-#    |        * get valid voice list for language
+#    |        * get valid voice list
 #    |
 #    v
 # +-------------------------------+

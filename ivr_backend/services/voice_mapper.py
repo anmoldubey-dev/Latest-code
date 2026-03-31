@@ -10,11 +10,11 @@
 # | * language name to model key     |
 # +----------------------------------+
 #     |
-#     |----> <LANGUAGE_TO_MODEL> -> get()    * lookup by language name
-#     |
-#     |----> return model key string         * e.g. "en", "hi", "te"
-#     |       OR
-#     |----> return "en"                     * default fallback
+#     |----> get()
+#     |        * lookup by language name
+#     |      OR
+#     |----> get()
+#     |        * return default fallback key
 #     |
 #     v
 # +----------------------------------+
@@ -22,11 +22,11 @@
 # | * language name to display label |
 # +----------------------------------+
 #     |
-#     |----> <LANGUAGE_TO_VOICE_NAME> -> get()  * lookup display name
-#     |
-#     |----> return voice label string          * e.g. "Lessac (US)"
-#     |       OR
-#     |----> return "Lessac (US)"               * default fallback
+#     |----> get()
+#     |        * lookup display name
+#     |      OR
+#     |----> get()
+#     |        * return default fallback name
 #
 # ================================================================
 

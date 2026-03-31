@@ -10,11 +10,8 @@
 # | * ORM model for users table   |
 # +-------------------------------+
 #     |
-#     |----> id / name / email / password_hash  * account fields
-#     |
-#     |----> is_active             * account status flag
-#     |
-#     |----> <relationship> -> Agent()  * one-to-one to Agent
+#     |----> relationship()
+#     |        * one-to-one to Agent
 #     |
 #     v
 # +-------------------------------+
@@ -22,15 +19,11 @@
 # | * ORM model for agents table  |
 # +-------------------------------+
 #     |
-#     |----> user_id              * FK to users table
+#     |----> relationship()
+#     |        * back-populates User.agent
 #     |
-#     |----> name / persona / voice_model  * AI agent identity
-#     |
-#     |----> last_sentiment        * latest sentiment score
-#     |
-#     |----> <relationship> -> User()   * back-populates User.agent
-#     |
-#     |----> <relationship> -> Call()   * one-to-many list of calls
+#     |----> relationship()
+#     |        * one-to-many list of calls
 #
 # ================================================================
 

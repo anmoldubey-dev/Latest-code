@@ -10,23 +10,26 @@
 # | * migrate DB and seed data    |
 # +-------------------------------+
 #     |
-#     |----> <sa_inspect> -> get_table_names()  * check existing tables
+#     |----> <inspect> -> get_table_names()
+#     |        * check existing tables
 #     |
-#     |----> <conn> -> execute()                * ALTER status ENUM migration
+#     |----> <conn> -> execute()
+#     |        * ALTER status ENUM migration
 #     |
-#     |----> <Base.metadata> -> create_all()    * create ORM tables
+#     |----> <Base.metadata> -> create_all()
+#     |        * create ORM tables
 #     |
-#     |----> <RECORDINGS_DIR> -> mkdir()        * ensure recordings dir
+#     |----> <Path> -> mkdir()
+#     |        * ensure recordings dir
 #     |
-#     |----> <call_service> -> seed_demo_data() * insert demo agents and calls
+#     |----> seed_demo_data()
+#     |        * insert demo agents and calls
 #     |
 #     v
 # +-------------------------------+
 # | health()                      |
 # | * GET /health liveness probe  |
 # +-------------------------------+
-#     |
-#     |----> return {"status": "ok"} * return health response
 #
 # ================================================================
 

@@ -32,7 +32,7 @@
 #     |        * NDJSON event stream
 #     |
 #     v
-# [ RETURN str | Generator[str] ]
+# [ RETURN str ]
 #
 # ================================================================
 """

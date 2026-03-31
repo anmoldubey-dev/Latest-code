@@ -10,15 +10,8 @@
 # | * ORM model for call_routes table    |
 # +--------------------------------------+
 #     |
-#     |----> call_id              * FK to calls table
-#     |
-#     |----> from_agent_id        * source agent FK
-#     |
-#     |----> to_agent_id          * destination agent FK
-#     |
-#     |----> action_type          * transfer/conference/ivr_redirect
-#     |
-#     |----> <relationship> -> Call()   * back-populates Call.routes
+#     |----> relationship()
+#     |        * back-populates Call.routes
 #
 # ================================================================
 

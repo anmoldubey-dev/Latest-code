@@ -23,7 +23,7 @@
 #     |        * read each language text file
 #     |
 #     v
-# [ RETURN {} empty dict fallback to caller ]
+# [ RETURN dict ]
 #
 # ================================================================
 

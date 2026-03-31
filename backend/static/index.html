@@ -485,7 +485,6 @@ let capCtx     = null;   // capture AudioContext
 let srcNode    = null;
 let worklet    = null;
 let micStream  = null;
-let sending    = false;  // starts false — only enabled after greeting finishes playing
 let callActive = false;
 
 /* ─── Per-message audio player ───────────────────────────────────────────── */
@@ -497,18 +496,52 @@ function _onAudioEnded() {
   isSpeaking     = false;
   currentSrc     = null;
   _activeAudioEl = null;
-  sending        = true;
   if (callActive) setStatus('ready', 'Listening…');
 }
 let agentName  = 'Agent';
 let tTurnStart = null;   // timestamp when transcript received — for response timer
 
+/* ─── Ambient room audio (call_centre_room.wav looped) ──────────────────── */
+let _ambCtx  = null;
+let _ambSrc  = null;
+let _ambGain = null;
+
+async function startAmbient() {
+  try {
+    _ambCtx  = new AudioContext();
+    _ambGain = _ambCtx.createGain();
+    _ambGain.gain.value = 0.35;   // audible but not overpowering
+    _ambGain.connect(_ambCtx.destination);
+
+    const resp = await fetch('/assets/call_centre_room.wav');
+    if (!resp.ok) { console.warn('[ambient] file not found at /assets/call_centre_room.wav'); return; }
+    const arrayBuf = await resp.arrayBuffer();
+    const audioBuf = await _ambCtx.decodeAudioData(arrayBuf);
+
+    _ambSrc        = _ambCtx.createBufferSource();
+    _ambSrc.buffer = audioBuf;
+    _ambSrc.loop   = true;
+    _ambSrc.connect(_ambGain);
+    _ambSrc.start();
+  } catch(e) { console.warn('[ambient] start failed:', e.message); }
+}
+
+function stopAmbient() {
+  try { _ambSrc?.stop(); }  catch {}
+  try { _ambCtx?.close(); } catch {}
+  _ambCtx = _ambSrc = _ambGain = null;
+}
+
 /* ─── Barge-in state ─────────────────────────────────────────────────────── */
 let currentSrc         = null;   // active AudioBufferSourceNode (so we can stop it)
 let isSpeaking         = false;  // true while AI audio is playing
-const BARGE_RMS        = 0.04;   // speech RMS is 0.03-0.07; raise to 0.06 if wind still triggers
-const BARGE_MIN_FRAMES = 4;      // consecutive frames above threshold (~400 ms at 100 ms/frame)
-let bargeInFrames      = 0;      // rolling consecutive-frame counter
+let isProcessing       = false;  // true while STT/LLM/TTS is in flight
+const BARGE_MIN_FRAMES = 8;      // consecutive frames above threshold (~800 ms)
+const BARGE_RATIO      = 2.5;    // voice must be 2.5× the ambient noise floor to count
+const BARGE_FLOOR_FRAMES = 30;   // calibrate noise floor from first 30 frames (~3 s)
+let bargeInFrames      = 0;
+let _noiseFloor        = 0.0;    // rolling ambient RMS average
+let _noiseCalibCount   = 0;      // frames used for calibration
 
 /* ─── Helpers ────────────────────────────────────────────────────────────── */
 const $ = id => document.getElementById(id);
@@ -553,6 +586,7 @@ function addMsg(bodyId, text, type, label, elapsedSec, audioB64) {
       wrapper.className = 'msg-audio';
       const audio = document.createElement('audio');
       audio.controls  = true;
+      audio.autoplay  = true;
       audio.src       = url;
       audio.dataset.blobUrl = url;   // remember for cleanup
       wrapper.appendChild(audio);
@@ -582,7 +616,7 @@ function hideTyping(bodyId) {
 
 /* ─── Barge-in handler ───────────────────────────────────────────────────── */
 function bargeIn() {
-  if (!isSpeaking || !callActive) return;
+  if ((!isSpeaking && !isProcessing) || !callActive) return;
 
   bargeInFrames = 0;
 
@@ -592,9 +626,9 @@ function bargeIn() {
     _activeAudioEl = null;
   }
 
-  currentSrc = null;
-  isSpeaking = false;
-  sending    = true;
+  currentSrc   = null;
+  isSpeaking   = false;
+  isProcessing = false;
 
   if (ws?.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({ type: 'interrupt' }));
@@ -608,23 +642,29 @@ function bargeIn() {
 function playMsgAudio(msgEl) {
   const audio = msgEl?.querySelector('audio');
   if (!audio) {
-    // No audio in this message — just enable mic
-    sending    = true;
     isSpeaking = false;
     if (callActive) setStatus('ready', 'Listening…');
     return;
   }
 
-  sending        = false;
   isSpeaking     = true;
   _activeAudioEl = audio;
   setStatus('playing', `${agentName} is speaking…`);
 
-  audio.addEventListener('ended', _onAudioEnded, { once: true });
-  audio.play().catch(() => {
-    // Autoplay blocked — mic stays paused but user can click ▶ manually
+  function _release() {
+    if (_activeAudioEl !== audio) return;
+    _onAudioEnded();
+  }
+
+  audio.addEventListener('ended', _release, { once: true });
+  audio.addEventListener('error', _release, { once: true });
+
+  audio.play().then(() => {
+    if (audio.ended) { _release(); return; }
+    const dur = (isFinite(audio.duration) && audio.duration > 0) ? audio.duration : 90;
+    setTimeout(() => { if (isSpeaking && _activeAudioEl === audio) _release(); }, (dur + 8) * 1000);
+  }).catch(() => {
     setStatus('ready', `Click ▶ to hear ${agentName}`);
-    sending        = true;
     isSpeaking     = false;
     _activeAudioEl = null;
   });
@@ -633,6 +673,8 @@ function playMsgAudio(msgEl) {
 /* ─── Call start ─────────────────────────────────────────────────────────── */
 async function startCall() {
   if (callActive) return;
+
+  isSpeaking = false;
 
   const lang      = $('sel-lang').value;
   const voiceName = $('sel-voice').value;
@@ -670,31 +712,35 @@ async function startCall() {
   worklet.port.onmessage = e => {
     const pcmChunk = e.data;
 
-    /* ── Barge-in detection: measure RMS even when AI is speaking ── */
-    if (!sending && isSpeaking && callActive) {
-      let sum = 0;
-      for (let i = 0; i < pcmChunk.length; i++) sum += pcmChunk[i] * pcmChunk[i];
-      const rms = Math.sqrt(sum / pcmChunk.length);
+    /* ── Barge-in detection: fire interrupt when AI is speaking ── */
+    /* ── Always calibrate noise floor from non-speaking frames ── */
+    let sum = 0;
+    for (let i = 0; i < pcmChunk.length; i++) sum += pcmChunk[i] * pcmChunk[i];
+    const rms = Math.sqrt(sum / pcmChunk.length);
 
-      if (rms > BARGE_RMS) {
-        bargeInFrames++;
-        /* Require BARGE_MIN_FRAMES consecutive loud frames (~200 ms) before
-           treating it as real speech — single noise spikes / wind pops ignored */
-        if (bargeInFrames >= BARGE_MIN_FRAMES) {
-          bargeInFrames = 0;
-          bargeIn();
-          return;  // bargeIn() sets sending=true; next frame will be forwarded normally
-        }
-      } else {
-        bargeInFrames = 0;  // reset streak on any quiet frame
-      }
-      return;  // still in AI-speaking window — don't forward mic audio yet
+    if (!isSpeaking && _noiseCalibCount < BARGE_FLOOR_FRAMES) {
+      _noiseCalibCount++;
+      _noiseFloor += (rms - _noiseFloor) / _noiseCalibCount;
     }
 
-    /* Not in AI-speaking window — reset the counter */
-    bargeInFrames = 0;
+    if ((isSpeaking || isProcessing) && callActive) {
+      const threshold = Math.max(0.08, _noiseFloor * BARGE_RATIO);
+      if (rms > threshold) {
+        bargeInFrames++;
+        if (bargeInFrames >= BARGE_MIN_FRAMES) {
+          bargeInFrames = 0;
+          console.log('[PCM] Barge-in  rms=' + rms.toFixed(3) + ' floor=' + _noiseFloor.toFixed(3) + ' thr=' + threshold.toFixed(3));
+          bargeIn();
+        }
+      } else {
+        bargeInFrames = 0;
+      }
+    } else {
+      bargeInFrames = 0;
+    }
 
-    if (ws?.readyState === WebSocket.OPEN && sending && callActive) {
+    /* Always stream PCM to backend — VAD lives server-side */
+    if (ws?.readyState === WebSocket.OPEN && callActive) {
       ws.send(pcmChunk.buffer);
     }
   };
@@ -710,12 +756,15 @@ async function startCall() {
     callActive = true;
     $('btn-end').disabled = false;
     setStatus('thinking', 'Connecting…');
+    startAmbient();   // start looping room noise the moment call connects
   };
 
   ws.onmessage = async evt => {
     let data;
     try { data = JSON.parse(evt.data); }
     catch { return; }
+
+    if (data.type === 'ping') { return; }
 
     if (data.type === 'greeting') {
       /* Server tells us the resolved agent name */
@@ -727,13 +776,13 @@ async function startCall() {
       if (data.audio) {
         playMsgAudio(greetEl);
       } else {
-        sending = true;
         setStatus('ready', 'Listening…');
       }
     }
 
     else if (data.type === 'transcript') {
-      tTurnStart = Date.now();
+      tTurnStart   = Date.now();
+      isProcessing = true;   // STT done, LLM+TTS in flight — enable barge-in
       clearEmptyState('tx-body', 'tx-empty');
       hideTyping('tx-body');
       addMsg('tx-body', data.text, 'user', 'You');
@@ -744,7 +793,8 @@ async function startCall() {
 
     else if (data.type === 'response') {
       const elapsed = tTurnStart ? ((Date.now() - tTurnStart) / 1000).toFixed(1) : null;
-      tTurnStart = null;
+      tTurnStart   = null;
+      isProcessing = false;  // LLM done, audio playback takes over
       hideTyping('ai-body');
       const respEl = addMsg('ai-body', data.text, 'ai', agentName, elapsed, data.audio || null);
       if (data.audio) {
@@ -775,6 +825,7 @@ function endCall() {
     ws?.close();
   }
   callActive = false;
+  stopAmbient();
   resetUI();
 }
 
@@ -876,8 +927,8 @@ function populateVoices(lang) {
 
 function resetUI() {
   callActive    = false;
-  sending       = true;
   isSpeaking    = false;
+  isProcessing  = false;
   currentSrc    = null;
   bargeInFrames = 0;
 
@@ -908,6 +959,14 @@ function resetUI() {
   ws = null; capCtx = null; worklet = null;
   srcNode = null; micStream = null;
 }
+
+/* ─── Watchdog: safety net if 'ended' event never fires ─────────────────── */
+setInterval(() => {
+  if (isSpeaking && _activeAudioEl && _activeAudioEl.ended) {
+    console.warn('[watchdog] audio.ended=true but _onAudioEnded not called — forcing release');
+    _onAudioEnded();
+  }
+}, 500);
 </script>
 </body>
 </html>

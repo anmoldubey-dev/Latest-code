@@ -1,3 +1,101 @@
+# ================================================================
+# FILE EXECUTION FLOW
+# ================================================================
+#
+# [ START ]
+#     |
+#     v
+# +---------------------------+
+# | _chunk_text()             |
+# | * split text into chunks  |
+# +---------------------------+
+#     |
+#     v
+# +---------------------------+
+# | _load_file()              |
+# | * read file UTF-8/latin-1 |
+# +---------------------------+
+#     |
+#     v
+# +---------------------------+
+# | __init__()                |
+# | * init RAG pipeline state |
+# +---------------------------+
+#     |
+#     v
+# +---------------------------+
+# | _ensure_ready()           |
+# | * lazy-load FAISS + embeds|
+# +---------------------------+
+#     |
+#     |----> _ingest_documents()
+#     |        * load docs build index
+#     |
+#     v
+# +---------------------------+
+# | _ingest_documents()       |
+# | * chunk docs into FAISS   |
+# +---------------------------+
+#     |
+#     |----> _load_file()
+#     |        * read each document
+#     |
+#     |----> _chunk_text()
+#     |        * split into chunks
+#     |
+#     v
+# +---------------------------+
+# | add_document()            |
+# | * add doc to live index   |
+# +---------------------------+
+#     |
+#     |----> _ensure_ready()
+#     |        * init if not ready
+#     |
+#     v
+# +---------------------------+
+# | rebuild()                 |
+# | * force full re-ingest    |
+# +---------------------------+
+#     |
+#     v
+# +---------------------------+
+# | retrieve()                |
+# | * top-k semantic search   |
+# +---------------------------+
+#     |
+#     |----> _ensure_ready()
+#     |        * init on first call
+#     |
+#     |----> similarity_search_with_score()
+#     |        * FAISS vector search
+#     |
+#     v
+# +---------------------------+
+# | get_context_string()      |
+# | * formatted LLM context   |
+# +---------------------------+
+#     |
+#     |----> retrieve()
+#     |        * fetch relevant chunks
+#     |
+#     v
+# +---------------------------+
+# | stats()                   |
+# | * return pipeline stats   |
+# +---------------------------+
+#     |
+#     v
+# +---------------------------+
+# | get_rag_pipeline()        |
+# | * singleton factory       |
+# +---------------------------+
+#     |
+#     v
+# [ END ]
+#
+# ================================================================
+
 """
 rag_pipeline
 ============
@@ -114,7 +212,11 @@ class RAGPipeline:
             from langchain_community.vectorstores import FAISS
             from langchain_core.documents         import Document
 
-            self._embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+            _proj_root = Path(__file__).parent.parent.parent
+            _local_embed = _proj_root / "models" / "all-MiniLM-L6-v2"
+            _hf_embed = Path(os.path.expanduser("~")) / ".cache" / "huggingface" / "hub" / "models--sentence-transformers--all-MiniLM-L6-v2" / "snapshots" / "8b3219a92973c328a8e22fadcfa821b5dc75636a"
+            _embed_path = str(_local_embed) if _local_embed.is_dir() else (str(_hf_embed) if _hf_embed.is_dir() else "all-MiniLM-L6-v2")
+            self._embeddings = HuggingFaceEmbeddings(model_name=_embed_path)
 
             # Try loading existing index
             if os.path.exists(self._index_path):

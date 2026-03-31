@@ -111,11 +111,13 @@
 import asyncio
 import base64
 import json
-import logging
 import random
 import sys
+import threading
+import time
 from contextlib import asynccontextmanager
-from typing import Dict, List, Optional
+from datetime import datetime
+from typing import List, Optional
 
 import numpy as np
 import requests as _req
@@ -130,27 +132,28 @@ from backend.core.config import (
 )
 from backend.core.state   import _m
 from backend.core.persona import extract_agent_name, generate_greeting
-from backend.audio.vad     import AudioBuf
 from backend.speech.stt_core          import stt_sync
 from backend.speech.stt.postprocessor import _collapse_repetitions, _is_hallucination
-from backend.speech.tts_client     import tts, _humanize_text, build_voice_registry
+from backend.speech.tts_client     import tts, _humanize_text, build_voice_registry, _INDIC_TTS_URL, _GLOBAL_TTS_URL
 from backend.language.llm_core     import _gemini_sync, _qwen_sync
 from backend.core.greeting_loader import load_greetings
 
 sys.path.insert(0, str(PROJECT_ROOT))
 load_dotenv(PROJECT_ROOT / ".env")
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)-8s %(name)s — %(message)s",
-)
-logger = logging.getLogger("callcenter")
+from backend.core.logger    import setup_logger
+from backend.core.decorator import log_execution
+
+logger = setup_logger("callcenter")
 
 STATIC = BACKEND_ROOT / "static"
 STATIC.mkdir(exist_ok=True)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    _t0 = time.perf_counter()
+    logger.info("[START] lifespan  at=%s", datetime.now().strftime("%H:%M:%S"))
+
     from backend.speech.stt.transcriber import StreamingTranscriber
     _m["stt"] = StreamingTranscriber()
 
@@ -164,38 +167,23 @@ async def lifespan(app: FastAPI):
         _m["gemini"] = None
 
     # ── Ollama (primary LLM) ──────────────────────────────────────────────
-    logger.info("Initialising Ollama responder (primary LLM)…")
-    try:
-        from backend.language.llm.ollama_responder import OllamaResponder
-        ollama_resp = OllamaResponder(model="qwen2.5:7b")
-        if ollama_resp.health_check():
-            _m["ollama"] = ollama_resp
-            logger.info("Ollama ready  model=qwen2.5:7b")
-        else:
-            _m["ollama"] = None
-            logger.warning("Ollama not reachable — LLM router will fall back to Gemini")
-    except Exception as exc:
-        logger.warning("Ollama init skipped: %s", exc)
-        _m["ollama"] = None
-
-    if OLLAMA_ENABLED and _m.get("ollama") is None:
-        # Legacy warm-up path for compatibility
-        logger.info("Attempting legacy Ollama warm-up…")
+    if OLLAMA_ENABLED:
+        logger.info("Initialising Ollama responder (primary LLM)…")
         try:
-            _req.post(
-                OLLAMA_URL,
-                json={
-                    "model": "qwen2.5:7b",
-                    "messages": [{"role": "user", "content": "hi"}],
-                    "stream": False,
-                    "keep_alive": -1,
-                    "options": {"num_predict": 1, "num_ctx": 512},
-                },
-                timeout=60,
-            )
-            logger.info("Ollama legacy warm-up done.")
+            from backend.language.llm.ollama_responder import OllamaResponder
+            ollama_resp = OllamaResponder(model="qwen2.5:7b")
+            if ollama_resp.health_check():
+                _m["ollama"] = ollama_resp
+                logger.info("Ollama ready  model=qwen2.5:7b")
+            else:
+                _m["ollama"] = None
+                logger.warning("Ollama not reachable — LLM router will fall back to Gemini")
         except Exception as exc:
-            logger.warning("Ollama warm-up skipped: %s", exc)
+            logger.warning("Ollama init skipped: %s", exc)
+            _m["ollama"] = None
+    else:
+        _m["ollama"] = None
+        logger.info("Ollama disabled (OLLAMA=false) — using Gemini")
 
     _m["greetings"] = load_greetings()
 
@@ -254,7 +242,10 @@ async def lifespan(app: FastAPI):
         logger.warning("Long-term memory unavailable: %s", exc)
         _m["long_term_memory"] = None
 
-    logger.info("All models ready. Server is up.")
+    logger.info(
+        "[END]   lifespan  elapsed=%.3fs  — all models ready, server is up.",
+        time.perf_counter() - _t0,
+    )
     yield
     logger.info("Shutdown complete.")
 
@@ -272,7 +263,18 @@ app.add_middleware(
 )
 
 
+@app.get("/assets/call_centre_room.wav")
+async def serve_room_audio():
+    path = PROJECT_ROOT / "services" / "tts_service" / "indic_tts" / "assets" / "call_centre_room.wav"
+    if not path.exists():
+        from fastapi.responses import Response
+        return Response(status_code=404)
+    from fastapi.responses import FileResponse
+    return FileResponse(str(path), media_type="audio/wav")
+
+
 @app.get("/")
+@log_execution
 async def index():
     html = STATIC / "index.html"
     if not html.exists():
@@ -281,6 +283,7 @@ async def index():
 
 
 @app.get("/stt-test")
+@log_execution
 async def stt_test_page():
     html = BACKEND_ROOT / "stt" / "stt_test.html"
     if not html.exists():
@@ -289,11 +292,13 @@ async def stt_test_page():
 
 
 @app.get("/api/voices")
+@log_execution
 async def api_voices():
     return _m.get("voice_registry", {})
 
 
 @app.websocket("/ws/stt-test")
+@log_execution
 async def ws_stt_test(ws: WebSocket, lang: str = "en", gap: int = 1000):
     """
     STT diagnostic endpoint.
@@ -375,6 +380,7 @@ async def ws_stt_test(ws: WebSocket, lang: str = "en", gap: int = 1000):
 
 
 @app.websocket("/ws/call")
+@log_execution
 async def ws_call(ws: WebSocket):
     await ws.accept()
 
@@ -414,31 +420,67 @@ async def ws_call(ws: WebSocket):
                 "file" if lang in _greetings else "generated", agent_name, greeting_text)
 
     history: List[dict] = []
+
+    # Simple VAD — identical to /ws/stt-test (proven reliable)
+    pcm_buf:          list         = []
+    last_speech_time: float | None = None
+    SILENCE_GAP = 0.9   # seconds of post-speech silence before STT fires
+
+    lock         = asyncio.Lock()
+    loop         = asyncio.get_event_loop()
+    interrupted  = False
+    current_turn_task: Optional[asyncio.Task] = None
+
+    # ── Generate greeting TTS while keeping WS alive with periodic pings ────
+    async def _gen_greeting() -> str:
+        try:
+            wav = await tts(greeting_text, lang, voice_stem)
+            return base64.b64encode(wav).decode()
+        except Exception:
+            logger.warning("Greeting TTS failed — sending text only")
+            return ""
+
+    greet_task = asyncio.create_task(_gen_greeting())
+
+    # Keep WS alive: drain incoming frames + send pings every 10 s
+    while not greet_task.done():
+        try:
+            msg = await asyncio.wait_for(ws.receive(), timeout=10.0)
+            if "text" in msg and msg["text"]:
+                if json.loads(msg["text"]).get("type") == "end":
+                    greet_task.cancel()
+                    return
+            # PCM frames during greeting generation are silently dropped —
+            # user will speak again after greeting plays
+        except asyncio.TimeoutError:
+            # Send a ping to keep the connection alive
+            try:
+                await ws.send_json({"type": "ping"})
+            except Exception:
+                greet_task.cancel()
+                return
+        except Exception:
+            greet_task.cancel()
+            return
+
     try:
-        g_b64 = base64.b64encode(await tts(greeting_text, lang, voice_stem)).decode()
-    except Exception:
-        logger.exception("Greeting TTS failed")
+        g_b64 = await greet_task
+    except BaseException:
         g_b64 = ""
 
     await ws.send_json({"type": "greeting", "text": greeting_text,
                         "audio": g_b64, "agent_name": agent_name})
     history.append({"role": "assistant", "text": greeting_text})
 
-    buf          = AudioBuf()
-    lock         = asyncio.Lock()
-    loop         = asyncio.get_event_loop()
-    interrupted  = False
-    current_turn_task: Optional[asyncio.Task] = None
-
     async def process_turn(pcm: np.ndarray) -> None:
         nonlocal interrupted, current_turn_task
+        logger.info("🎤 VAD fired — pcm=%.2fs  starting STT", len(pcm) / 16_000)
 
         async with lock:
             try:
                 user_text = await loop.run_in_executor(None, stt_sync, pcm, lang)
             except Exception:
                 logger.exception("STT error")
-                buf.flush()
                 return
             if not user_text:
                 return
@@ -463,7 +505,6 @@ async def ws_call(ws: WebSocket):
                 ai_text = await llm_fut
             except Exception:
                 logger.exception("LLM error")
-                buf.flush()
                 canned = LANGUAGE_CONFIG.get(lang, {}).get(
                     "canned_error",
                     "Sorry, I had a connection issue. Could you repeat that?",
@@ -527,10 +568,25 @@ async def ws_call(ws: WebSocket):
             msg = await ws.receive()
 
             if "bytes" in msg and msg["bytes"]:
-                buf.push(np.frombuffer(msg["bytes"], dtype=np.float32))
-                if buf.ready() and not lock.locked():
-                    pcm = buf.flush()
-                    if pcm is not None:
+                chunk = np.frombuffer(msg["bytes"], dtype=np.float32)
+                rms   = float(np.sqrt(np.mean(chunk ** 2)))
+                logger.debug("[RX] RMS=%.6f  speech_frames=%d  last_speech=%.3fs",
+                             rms, len(pcm_buf),
+                             loop.time() - last_speech_time if last_speech_time else -1.0)
+
+                if rms > 0.015:
+                    logger.info("[RX] VAD triggered  RMS=%.6f", rms)
+                    pcm_buf.append(chunk)
+                    last_speech_time = loop.time()
+                elif last_speech_time is not None:
+                    # Post-speech silence — keep buffering so Whisper sees natural end
+                    pcm_buf.append(chunk)
+                    now = loop.time()
+                    if not lock.locked() and (now - last_speech_time) >= SILENCE_GAP:
+                        logger.info("[RX] STT start  buf=%.2fs", len(pcm_buf) * 1600 / 16_000)
+                        pcm = np.concatenate(pcm_buf)
+                        pcm_buf.clear()
+                        last_speech_time = None
                         current_turn_task = asyncio.create_task(process_turn(pcm))
 
             elif "text" in msg and msg["text"]:
@@ -544,8 +600,17 @@ async def ws_call(ws: WebSocket):
                 elif evt_type == "interrupt":
                     interrupted = True
                     logger.info("🛑 Barge-in received")
-                    if not lock.locked():
-                        interrupted = False
+                    # Cancel the in-flight turn so LLM/TTS stops immediately
+                    if current_turn_task and not current_turn_task.done():
+                        current_turn_task.cancel()
+                    # Signal both TTS services to stop
+                    for _tts_url in (_INDIC_TTS_URL, _GLOBAL_TTS_URL):
+                        def _cancel_tts(u=_tts_url):
+                            try: _req.post(f"{u}/cancel", timeout=1)
+                            except Exception: pass
+                        threading.Thread(target=_cancel_tts, daemon=True).start()
+                    # Do NOT clear pcm_buf — user is already speaking, keep buffering
+                    # interrupted flag stays True until process_turn checks it
 
     except WebSocketDisconnect:
         logger.info("Client disconnected")

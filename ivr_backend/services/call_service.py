@@ -10,11 +10,14 @@
 # | * INSERT new call row            |
 # +----------------------------------+
 #     |
-#     |----> <Call> -> __init__()     * build ORM object
+#     |----> <Call> -> __init__()
+#     |        * build ORM object
 #     |
-#     |----> <db> -> add()            * stage for insert
+#     |----> <db> -> add()
+#     |        * stage for insert
 #     |
-#     |----> <db> -> commit()         * persist to MySQL
+#     |----> <db> -> commit()
+#     |        * persist to MySQL
 #     |
 #     v
 # +----------------------------------+
@@ -22,11 +25,11 @@
 # | * UPDATE call status to ended    |
 # +----------------------------------+
 #     |
-#     |----> <db> -> query()          * fetch call by id
+#     |----> <db> -> query()
+#     |        * fetch call by id
 #     |
-#     |----> set ended_at / status    * update fields
-#     |
-#     |----> <db> -> commit()         * persist changes
+#     |----> <db> -> commit()
+#     |        * persist status change
 #     |
 #     v
 # +----------------------------------+
@@ -34,7 +37,8 @@
 # | * SELECT non-ended calls         |
 # +----------------------------------+
 #     |
-#     |----> <db> -> query()          * filter active statuses
+#     |----> <db> -> query()
+#     |        * filter active statuses
 #     |
 #     v
 # +----------------------------------+
@@ -42,7 +46,8 @@
 # | * SELECT paginated ended calls   |
 # +----------------------------------+
 #     |
-#     |----> <db> -> query()          * offset and limit applied
+#     |----> <db> -> query()
+#     |        * paginated ended calls
 #     |
 #     v
 # +----------------------------------+
@@ -50,7 +55,8 @@
 # | * SELECT single call by id       |
 # +----------------------------------+
 #     |
-#     |----> <db> -> query()          * filter by Call.id
+#     |----> <db> -> query()
+#     |        * filter by call id
 #     |
 #     v
 # +----------------------------------+
@@ -58,9 +64,11 @@
 # | * DELETE call with cascade       |
 # +----------------------------------+
 #     |
-#     |----> <db> -> delete()         * cascade routes and transcripts
+#     |----> <db> -> delete()
+#     |        * cascade routes and transcripts
 #     |
-#     |----> <db> -> commit()         * persist deletion
+#     |----> <db> -> commit()
+#     |        * persist deletion
 #     |
 #     v
 # +----------------------------------+
@@ -68,11 +76,11 @@
 # | * INSERT CallRoute update call   |
 # +----------------------------------+
 #     |
-#     |----> <CallRoute> -> __init__() * build route ORM
+#     |----> <CallRoute> -> __init__()
+#     |        * build route ORM object
 #     |
-#     |----> set call.status = "transferred"  * update call
-#     |
-#     |----> <db> -> commit()          * persist route and call
+#     |----> <db> -> commit()
+#     |        * persist route and call
 #     |
 #     v
 # +----------------------------------+
@@ -80,11 +88,14 @@
 # | * INSERT Transcript row          |
 # +----------------------------------+
 #     |
-#     |----> <db> -> query()           * verify call exists
+#     |----> <db> -> query()
+#     |        * verify call exists
 #     |
-#     |----> <Transcript> -> __init__() * build ORM object
+#     |----> <Transcript> -> __init__()
+#     |        * build ORM object
 #     |
-#     |----> <db> -> commit()           * persist transcript
+#     |----> <db> -> commit()
+#     |        * persist transcript
 #     |
 #     v
 # +----------------------------------+
@@ -92,7 +103,8 @@
 # | * SELECT ordered transcripts     |
 # +----------------------------------+
 #     |
-#     |----> <db> -> query()           * filter by call_id asc
+#     |----> <db> -> query()
+#     |        * filter by call_id asc
 #     |
 #     v
 # +----------------------------------+
@@ -100,23 +112,26 @@
 # | * insert demo agents if empty    |
 # +----------------------------------+
 #     |
-#     |----> <db> -> query()           * check Agent count
+#     |----> <db> -> query()
+#     |        * check Agent count
 #     |
-#     |----> <db> -> add_all()         * insert Agent rows
+#     |----> <db> -> add_all()
+#     |        * insert Agent and Call rows
 #     |
-#     |----> <db> -> add_all()         * insert Call rows
+#     |----> <db> -> add()
+#     |        * insert CallRoute row
 #     |
-#     |----> <db> -> add_all()         * insert Transcript rows
-#     |
-#     |----> <db> -> add()             * insert CallRoute row
-#     |
-#     |----> <db> -> commit()          * persist all demo data
+#     |----> <db> -> commit()
+#     |        * persist all demo data
 #
 # ================================================================
 
+import logging
 from datetime import datetime, timedelta
 from typing import List, Optional
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 from ..models.call import Call
 from ..models.call_route import CallRoute
@@ -140,6 +155,7 @@ def create_call(
     db.add(call)
     db.commit()
     db.refresh(call)
+    logger.info("[call_service] call created  id=%s  caller=%s  dept=%s", call.id, caller_number, department)
     return call
 
 
@@ -154,6 +170,7 @@ def end_call(db: Session, call_id: int) -> Optional[Call]:
         call.duration_seconds = int((now - call.started_at).total_seconds())
     db.commit()
     db.refresh(call)
+    logger.info("[call_service] call ended  id=%s  duration=%ss", call.id, call.duration_seconds)
     return call
 
 

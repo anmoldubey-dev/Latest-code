@@ -10,11 +10,11 @@
 # | * model key to onnx path         |
 # +----------------------------------+
 #     |
-#     |----> <_VOICE_MODELS> -> get()    * lookup by model key
+#     |----> get()
+#     |        * lookup by model key
 #     |
-#     |----> <common> -> glob()          * fallback scan common/
-#     |
-#     |----> return path string          * resolved .onnx path
+#     |----> glob()
+#     |        * fallback scan common/
 #     |
 #     v
 # +----------------------------------+
@@ -22,17 +22,17 @@
 # | * blocking Piper subprocess call |
 # +----------------------------------+
 #     |
-#     |----> <tempfile> -> NamedTemporaryFile()  * create temp WAV
+#     |----> <NamedTemporaryFile> -> __init__()
+#     |        * create temp WAV file
 #     |
-#     |----> <subprocess> -> run()               * invoke piper.exe
-#     |           |
-#     |           |----> --model onnx_path        * voice model arg
-#     |           |
-#     |           |----> --output_file tmp.wav    * write WAV output
+#     |----> run()
+#     |        * invoke piper subprocess
 #     |
-#     |----> open(tmp.name)                       * read WAV bytes
+#     |----> open()
+#     |        * read WAV bytes
 #     |
-#     |----> <os> -> unlink()                     * delete temp file
+#     |----> unlink()
+#     |        * delete temp file
 #     |
 #     v
 # +----------------------------------+
@@ -40,19 +40,19 @@
 # | * async TTS entry point          |
 # +----------------------------------+
 #     |
-#     |----> <voice_mapper> -> get_model_key()   * language to model key
+#     |----> get_model_key()
+#     |        * language to model key
 #     |
-#     |----> _resolve_model()                    * key to onnx path
-#     |       OR
-#     |----> use model_path directly             * if caller provided path
+#     |----> _resolve_model()
+#     |        * key to onnx path
 #     |
-#     |----> <loop> -> run_in_executor()         * offload to thread pool
-#                 |
-#                 |----> _piper_sync()           * blocking call in thread
+#     |----> run_in_executor()
+#     |        * offload _piper_sync() to thread
 #
 # ================================================================
 
 import asyncio
+import logging
 import os
 import subprocess
 import tempfile
@@ -60,6 +60,8 @@ from pathlib import Path
 from typing import Optional
 
 from .voice_mapper import get_model_key
+
+logger = logging.getLogger(__name__)
 
 _PROJECT_ROOT = Path(__file__).parent.parent.parent
 _PIPER_EXE    = str(_PROJECT_ROOT / "backend" / "tts" / "piper" / "piper.exe")
@@ -109,9 +111,13 @@ def _piper_sync(text: str, model_path: str) -> bytes:
             capture_output=True,
         )
         if res.returncode != 0:
-            raise RuntimeError(res.stderr.decode("utf-8", errors="replace").strip())
+            err = res.stderr.decode("utf-8", errors="replace").strip()
+            logger.error("[tts_service] piper failed  model=%s  err=%s", model_path, err)
+            raise RuntimeError(err)
         with open(tmp.name, "rb") as fh:
-            return fh.read()
+            wav = fh.read()
+        logger.debug("[tts_service] piper done  model=%s  bytes=%d", model_path, len(wav))
+        return wav
     finally:
         if os.path.exists(tmp.name):
             os.unlink(tmp.name)

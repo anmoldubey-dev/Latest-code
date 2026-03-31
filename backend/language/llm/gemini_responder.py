@@ -7,25 +7,26 @@
 #     v
 # +----------------------------------------------+
 # | __init__()                                   |
-# | * validate API key, init Gemini client       |
+# | * validate API key, init client              |
 # +----------------------------------------------+
 #     |
 #     |----> <genai.Client> -> __init__()
 #     |        * create Google GenAI client
 #     |
 #     v
-# [ END — no generate method here;               ]
-# [ inference called via client.models.generate_ ]
-# [ content() in backend/core/llm.py             ]
+# [ END ]
 #
 # ================================================================
 
+import logging
 import os
 
 from dotenv import load_dotenv
 import google.genai as genai
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 
 class GeminiResponder:
@@ -40,3 +41,4 @@ class GeminiResponder:
 
         self.client   = genai.Client(api_key=api_key)
         self.model_id = "gemini-2.5-flash"
+        logger.info("[GeminiResponder] ready  model=%s", self.model_id)

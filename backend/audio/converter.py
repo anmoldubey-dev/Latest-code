@@ -46,12 +46,15 @@
 # ================================================================
 
 import io
+import logging
 import wave
 from math import gcd
 from typing import Tuple
 
 import numpy as np
 from scipy.signal import resample_poly
+
+logger = logging.getLogger(__name__)
 
 
 def wav_bytes_to_pcm(wav_bytes: bytes) -> Tuple[np.ndarray, int]:

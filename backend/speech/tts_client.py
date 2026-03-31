@@ -22,6 +22,7 @@
 #     |----> endswith()
 #     |        * ensure terminal punctuation
 #     |
+#     |
 #     v
 # +-----------------------------+
 # | tts()                       |
@@ -447,13 +448,13 @@ def _http_tts_sync(
                 "voice_name": voice_name,
                 "language":   display_lang,
             },
-            timeout=60,
+            timeout=600,
         )
         gen.raise_for_status()
         audio_path: str = gen.json()["url"]   # e.g. "/audio/rec1.wav"
 
         # Step 2 — download the generated WAV file
-        wav = _req.get(f"{service_url}{audio_path}", timeout=30)
+        wav = _req.get(f"{service_url}{audio_path}", timeout=60)
         wav.raise_for_status()
 
         logger.debug(

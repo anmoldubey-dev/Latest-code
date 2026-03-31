@@ -10,21 +10,20 @@
 # | * convert ORM Call to dict       |
 # +----------------------------------+
 #     |
-#     |----> compute live duration    * if call still active
-#     |
-#     |----> return dict              * JSON serializable call data
-#     |
 #     v
 # +----------------------------------+
 # | start_call()                     |
 # | * POST /calls/start new call     |
 # +----------------------------------+
 #     |
-#     |----> <call_service> -> create_call()      * INSERT calls row
+#     |----> create_call()
+#     |        * INSERT calls row
 #     |
-#     |----> <call_service> -> add_transcript()   * system turn inserted
+#     |----> add_transcript()
+#     |        * insert system turn
 #     |
-#     |----> _serialize_call()                    * return call data
+#     |----> _serialize_call()
+#     |        * convert ORM to dict
 #     |
 #     v
 # +----------------------------------+
@@ -32,11 +31,14 @@
 # | * POST /calls/{id}/end close     |
 # +----------------------------------+
 #     |
-#     |----> <call_service> -> end_call()         * UPDATE status ended
+#     |----> end_call()
+#     |        * UPDATE status ended
 #     |
-#     |----> <call_service> -> add_transcript()   * system turn inserted
+#     |----> add_transcript()
+#     |        * insert system turn
 #     |
-#     |----> _serialize_call()                    * return call data
+#     |----> _serialize_call()
+#     |        * convert ORM to dict
 #     |
 #     v
 # +----------------------------------+
@@ -44,7 +46,8 @@
 # | * GET /calls/active list calls   |
 # +----------------------------------+
 #     |
-#     |----> <call_service> -> get_active_calls() * query active statuses
+#     |----> get_active_calls()
+#     |        * query active statuses
 #     |
 #     v
 # +----------------------------------+
@@ -52,7 +55,8 @@
 # | * GET /calls/history paginated   |
 # +----------------------------------+
 #     |
-#     |----> <call_service> -> get_call_history() * paginated ended calls
+#     |----> get_call_history()
+#     |        * fetch paginated ended calls
 #     |
 #     v
 # +----------------------------------+
@@ -60,13 +64,17 @@
 # | * POST /calls/{id}/transfer      |
 # +----------------------------------+
 #     |
-#     |----> <call_service> -> get_call_by_id()  * lookup call
+#     |----> get_call_by_id()
+#     |        * lookup call by id
 #     |
-#     |----> <call_service> -> transfer_call()   * INSERT CallRoute row
+#     |----> transfer_call()
+#     |        * INSERT CallRoute row
 #     |
-#     |----> <call_service> -> add_transcript()  * system turn inserted
+#     |----> add_transcript()
+#     |        * insert system turn
 #     |
-#     |----> _serialize_call()                   * return call data
+#     |----> _serialize_call()
+#     |        * convert ORM to dict
 #     |
 #     v
 # +----------------------------------+
@@ -74,7 +82,8 @@
 # | * POST /calls/{id}/transcript    |
 # +----------------------------------+
 #     |
-#     |----> <call_service> -> add_transcript()  * INSERT Transcript row
+#     |----> add_transcript()
+#     |        * INSERT Transcript row
 #     |
 #     v
 # +----------------------------------+
@@ -82,7 +91,8 @@
 # | * GET /calls/{id}/transcripts    |
 # +----------------------------------+
 #     |
-#     |----> <call_service> -> get_transcripts() * SELECT ordered turns
+#     |----> get_transcripts()
+#     |        * SELECT ordered turns
 #     |
 #     v
 # +----------------------------------+
@@ -90,7 +100,8 @@
 # | * DELETE /calls/{id} cascade     |
 # +----------------------------------+
 #     |
-#     |----> <call_service> -> delete_call()     * DELETE with cascade
+#     |----> delete_call()
+#     |        * DELETE with cascade
 #     |
 #     v
 # +----------------------------------+
@@ -98,9 +109,11 @@
 # | * PATCH /calls/{id}/recording    |
 # +----------------------------------+
 #     |
-#     |----> <call_service> -> get_call_by_id()  * lookup call
+#     |----> get_call_by_id()
+#     |        * lookup call by id
 #     |
-#     |----> <db> -> commit()                    * persist recording path
+#     |----> <db> -> commit()
+#     |        * persist recording path
 #     |
 #     v
 # +----------------------------------+
@@ -108,17 +121,22 @@
 # | * GET /calls/{id}/recording WAV  |
 # +----------------------------------+
 #     |
-#     |----> <call_service> -> get_call_by_id()  * lookup call
+#     |----> get_call_by_id()
+#     |        * lookup call by id
 #     |
-#     |----> return FileResponse()               * stream audio/wav bytes
+#     |----> <FileResponse> -> __init__()
+#     |        * stream audio/wav bytes
 #
 # ================================================================
 
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+
+logger = logging.getLogger(__name__)
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session

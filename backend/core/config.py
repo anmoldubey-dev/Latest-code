@@ -20,6 +20,7 @@
 #
 # ================================================================
 
+import os
 from pathlib import Path
 from typing import Dict
 
@@ -27,7 +28,8 @@ BACKEND_ROOT = Path(__file__).parent.parent
 PROJECT_ROOT = BACKEND_ROOT.parent
 
 OLLAMA_URL     = "http://localhost:11434/api/chat"
-OLLAMA_ENABLED = False   # Set to False to skip Ollama/Qwen warm-up entirely
+# Controlled by OLLAMA env var (set by start_all.bat from services.config)
+OLLAMA_ENABLED = os.environ.get("OLLAMA", "false").strip().lower() == "true"
 
 LANGUAGE_CONFIG: Dict[str, dict] = {
     "en": {

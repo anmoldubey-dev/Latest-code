@@ -7,20 +7,14 @@
 #     v
 # +------------------------------------------+
 # | TranscriptCreate()                        |
-# | * POST /calls/{id}/transcript request     |
+# | * POST transcript request schema          |
 # +------------------------------------------+
-#     |
-#     |----> speaker              * agent / caller / system
-#     |
-#     |----> text                 * transcribed speech content
 #     |
 #     v
 # +------------------------------------------+
 # | TranscriptResponse()                      |
-# | * serialized transcript response model    |
+# | * serialized transcript response schema   |
 # +------------------------------------------+
-#     |
-#     |----> id / call_id / speaker / text / created_at  * response fields
 #
 # ================================================================
 

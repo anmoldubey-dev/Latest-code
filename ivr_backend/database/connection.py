@@ -10,19 +10,11 @@
 # | * init MySQL connection pool  |
 # +-------------------------------+
 #     |
-#     |----> pool_pre_ping=True  * detect stale connections
-#     |
-#     |----> pool_recycle=3600   * recycle connections hourly
-#     |
 #     v
 # +-------------------------------+
 # | sessionmaker()                |
 # | * configure session factory   |
 # +-------------------------------+
-#     |
-#     |----> autocommit=False    * manual transaction control
-#     |
-#     |----> autoflush=False     * explicit flush only
 #     |
 #     v
 # +-------------------------------+
@@ -30,11 +22,11 @@
 # | * yield DB session dependency |
 # +-------------------------------+
 #     |
-#     |----> <SessionLocal> -> __call__() * open DB session
+#     |----> <SessionLocal> -> __call__()
+#     |        * open DB session
 #     |
-#     |----> yield db             * inject into route handler
-#     |
-#     |----> <db> -> close()      * cleanup on request end
+#     |----> <db> -> close()
+#     |        * cleanup on request end
 #
 # ================================================================
 

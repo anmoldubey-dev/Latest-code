@@ -23,10 +23,19 @@
 # +-------------------------------+
 #     |
 #     |----> <Room> -> connect()
+#     |        * join LiveKit room
+#     |
 #     |----> <TtsAudioSource> -> start()
+#     |        * launch audio pump task
+#     |
 #     |----> <LiveKitSessionManager> -> add()
+#     |        * register session by id
+#     |
 #     |----> <SessionMemory> -> __init__()
+#     |        * init per-call memory
+#     |
 #     |----> _send_greeting()
+#     |        * TTS greeting to room
 #     |
 #     v
 # +-------------------------------+
@@ -35,8 +44,13 @@
 # +-------------------------------+
 #     |
 #     |----> <AudioBuf> -> push()
+#     |        * buffer and gate PCM
+#     |
 #     |----> <InterruptionDetector> -> update_audio()
+#     |        * detect energy spike barge-in
+#     |
 #     |----> _process_turn()
+#     |        * fire full AI pipeline
 #     |
 #     v
 # +-------------------------------+
@@ -45,18 +59,43 @@
 # +-------------------------------+
 #     |
 #     |----> stt_sync()
+#     |        * transcribe PCM to text
+#     |
 #     |----> <FeedbackLoop> -> apply()
+#     |        * apply STT corrections
+#     |
 #     |----> <InterruptionDetector> -> check_text()
+#     |        * detect keyword barge-in
+#     |
 #     |----> <NERExtractor> -> extract()
+#     |        * extract named entities
+#     |
 #     |----> <LLMRouter> -> route()
+#     |        * primary/fallback LLM inference
+#     |
 #     |----> <PersonaEngine> -> modulate_audio()
+#     |        * pitch and speed DSP
+#     |
 #     |----> <SessionMemory> -> add_turn()
+#     |        * store turn in session
+#     |
 #     |----> <RAGPipeline> -> retrieve()
+#     |        * fetch relevant context chunks
+#     |
 #     |----> <SmartSuggestions> -> suggest()
+#     |        * generate reply suggestions
+#     |
 #     |----> tts()
+#     |        * synthesize reply audio
+#     |
 #     |----> <TtsAudioSource> -> push_tts_wav()
+#     |        * enqueue WAV to LiveKit
+#     |
 #     |----> save_transcript()
+#     |        * persist turn to IVR API
+#     |
 #     |----> <ConversationMemory> -> save_interaction()
+#     |        * embed and persist to FAISS
 #     |
 #     v
 # +-------------------------------+
@@ -65,7 +104,10 @@
 # +-------------------------------+
 #     |
 #     |----> <CallSummarizer> -> summarize()
+#     |        * generate post-call summary
+#     |
 #     |----> <LongTermMemory> -> save_call_record()
+#     |        * persist summary to SQLite
 #
 # ================================================================
 

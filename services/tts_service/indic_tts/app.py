@@ -58,8 +58,8 @@
 # ================================================================
 
 import asyncio
-import logging
 import os
+import sys
 import time
 from pathlib import Path
 
@@ -73,8 +73,16 @@ from pydantic import BaseModel
 
 load_dotenv()
 
-logging.basicConfig(level=logging.INFO, format="%(levelname)s  %(name)s  %(message)s")
-logger = logging.getLogger("human_tts_2")
+# ── Shared logging setup ──────────────────────────────────────────────────────
+_SERVICES_DIR = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+)  # indic_tts -> tts_service -> services
+if _SERVICES_DIR not in sys.path:
+    sys.path.insert(0, _SERVICES_DIR)
+
+from log_utils import setup_logger, log_execution   # noqa: E402
+
+logger = setup_logger("indic_tts")
 
 MODEL_NAME = os.getenv("MODEL_NAME", "ai4bharat/indic-parler-tts")
 DEVICE = os.getenv("DEVICE", "cuda")
@@ -91,12 +99,14 @@ engine = TTSEngine(model_name=MODEL_NAME, device=DEVICE)
 sculptor = HumanVoiceSculptor()
 
 _generation_lock = asyncio.Lock()
-_model_loading = True
+_model_loading   = True
+_cancel_flag     = False   # set by /cancel; checked before each new generation
 
 app = FastAPI(title="human_tts_2", version="1.0.0")
 
 
 @app.on_event("startup")
+@log_execution
 async def startup_event():
     global _model_loading
     loop = asyncio.get_event_loop()
@@ -168,6 +178,7 @@ class GenerateResponse(BaseModel):
 
 
 @app.get("/health")
+@log_execution(rate_limit=60)
 async def health():
     if _model_loading:
         status = "loading"
@@ -182,8 +193,18 @@ async def health():
     }
 
 
+@app.post("/cancel")
+async def cancel_generation():
+    """Signal the TTS service to skip the next queued generation (barge-in support)."""
+    global _cancel_flag
+    _cancel_flag = True
+    return {"status": "cancel_requested"}
+
+
 @app.post("/generate", response_model=GenerateResponse)
+@log_execution
 async def generate(req: GenerateRequest):
+    global _cancel_flag
     if _model_loading:
         raise HTTPException(status_code=503, detail="Model is still loading, please wait.")
     if not engine.ready:
@@ -191,6 +212,11 @@ async def generate(req: GenerateRequest):
 
     if _generation_lock.locked():
         raise HTTPException(status_code=429, detail="Generation in progress, please wait.")
+
+    # Barge-in: skip this generation if a cancel was requested while we were waiting
+    if _cancel_flag:
+        _cancel_flag = False
+        raise HTTPException(status_code=503, detail="Generation cancelled by barge-in.")
 
     from core.presets import VOICES, EMOTION_LABELS, LANGUAGES
     valid_emotions = EMOTION_LABELS

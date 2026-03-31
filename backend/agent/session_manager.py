@@ -16,7 +16,7 @@
 # | * register session by id      |
 # +-------------------------------+
 #    |
-#    |----> <asyncio.Lock> -> acquire()
+#    |----> <Lock> -> acquire()
 #    |        * lock registry for write
 #    |
 #    v
@@ -31,7 +31,7 @@
 # | * pop session from registry   |
 # +-------------------------------+
 #    |
-#    |----> <asyncio.Lock> -> acquire()
+#    |----> <Lock> -> acquire()
 #    |        * lock registry for write
 #    |
 #    v

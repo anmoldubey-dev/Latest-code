@@ -11,7 +11,7 @@
 # +-------------------------------+
 #     |
 #     |----> <HuggingFaceEmbeddings> -> __init__()
-#     |        * load all-MiniLM-L6-v2 model
+#     |        * load sentence embedding model
 #     |
 #     |----> <FAISS> -> load_local()
 #     |        * load existing index from disk
@@ -26,7 +26,7 @@
 # +-------------------------------+
 #     |
 #     |----> <Document> -> __init__()
-#     |        * wrap turn text and metadata
+#     |        * wrap turn text as document
 #     |
 #     |----> <FAISS> -> add_documents()
 #     |        * add embedding to index
@@ -71,7 +71,10 @@ class ConversationMemory:
     def __init__(self, index_path: str = "faiss_index") -> None:
         self.index_path = index_path
         logger.info("[Memory] Loading embedding model (all-MiniLM-L6-v2)…")
-        self.embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+        _proj   = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        _local  = os.path.join(_proj, "models", "all-MiniLM-L6-v2")
+        _model  = _local if os.path.isdir(_local) else "all-MiniLM-L6-v2"
+        self.embeddings = HuggingFaceEmbeddings(model_name=_model)
 
         if os.path.exists(index_path):
             logger.info("[Memory] Loading existing FAISS index from %s", index_path)

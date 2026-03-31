@@ -10,7 +10,7 @@
 # | * full DSP pipeline on audio  |
 # +-------------------------------+
 #    |
-#    |----> peak normalize
+#    |----> normalize()
 #    |        * normalize raw TTS to 0.95 peak
 #    |
 #    |----> _mix_room_ambience()

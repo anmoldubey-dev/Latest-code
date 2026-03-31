@@ -1,3 +1,7 @@
+# ================================================================
+# FILE EXECUTION FLOW
+# ================================================================
+#
 # [ START ]
 #     |
 #     v
@@ -7,7 +11,7 @@
 # +----------------------------------------------+
 #     |
 #     |----> <OllamaLLM> -> __init__()
-#     |        * init with given model name
+#     |        * init Ollama LLM client
 #     |
 #     v
 # +----------------------------------------------+
@@ -22,11 +26,17 @@
 #     |        * run prompt through LLM chain
 #     |
 #     v
-# [ RETURN stripped response string ]
+# [ END ]
+#
+# ================================================================
+
+import logging
 
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_ollama import OllamaLLM
+
+logger = logging.getLogger(__name__)
 
 
 class LanguageResponder:
@@ -42,6 +52,9 @@ class LanguageResponder:
         chain = prompt_template | self.llm | StrOutputParser()
 
         try:
-            return chain.invoke({"input": user_text}).strip()
+            result = chain.invoke({"input": user_text}).strip()
+            logger.debug("[LanguageResponder] generate_response done  model=%s", self.llm.model)
+            return result
         except Exception as exc:
+            logger.error("[LanguageResponder] generate_response error: %s", exc)
             return f"Error generating response: {exc}"

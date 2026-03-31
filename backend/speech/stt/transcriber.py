@@ -200,20 +200,36 @@ INDIC_PROMPTS: dict[str, str] = {
     "en-in": "This is an Indian English conversation. It may contain technical terms and local nuances.",
 }
 
-# ── Local HuggingFace cache snapshot map for faster-whisper ─────────────────
-_HF = os.path.join(os.path.expanduser("~"), ".cache", "huggingface", "hub")
-_WHISPER_CACHE: dict = {
-    "large-v3":  os.path.join(_HF, "models--Systran--faster-whisper-large-v3",  "snapshots", "edaa852ec7e145841d8ffdb056a99866b5f0a478"),
-    "medium":    os.path.join(_HF, "models--Systran--faster-whisper-medium",     "snapshots", "08e178d48790749d25932bbc082711ddcfdfbc4f"),
-    "small":     os.path.join(_HF, "models--Systran--faster-whisper-small",      "snapshots", "536b0662742c02347bc0e980a01041f333bce120"),
-    "small.en":  os.path.join(_HF, "models--Systran--faster-whisper-small.en",   "snapshots", "d1d751a5f8271d482d14ca55d9e2deeebbae577f"),
-    "base.en":   os.path.join(_HF, "models--Systran--faster-whisper-base.en",    "snapshots", "3d3d5dee26484f91867d81cb899cfcf72b96be6c"),
+# ── Model resolution: project-local models/ folder takes priority ────────────
+#    Place models at:  voice-ai-core/models/faster-whisper-small/  etc.
+#    Falls back to ~/.cache/huggingface/hub/, then HF auto-download.
+_PROJECT_ROOT  = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+_LOCAL_MODELS  = os.path.join(_PROJECT_ROOT, "models")
+_HF            = os.path.join(os.path.expanduser("~"), ".cache", "huggingface", "hub")
+
+_WHISPER_NAMES = {
+    "large-v3": ("faster-whisper-large-v3",  "models--Systran--faster-whisper-large-v3",  "edaa852ec7e145841d8ffdb056a99866b5f0a478"),
+    "medium":   ("faster-whisper-medium",     "models--Systran--faster-whisper-medium",     "08e178d48790749d25932bbc082711ddcfdfbc4f"),
+    "small":    ("faster-whisper-small",      "models--Systran--faster-whisper-small",      "536b0662742c02347bc0e980a01041f333bce120"),
+    "small.en": ("faster-whisper-small.en",   "models--Systran--faster-whisper-small.en",   "d1d751a5f8271d482d14ca55d9e2deeebbae577f"),
+    "base.en":  ("faster-whisper-base.en",    "models--Systran--faster-whisper-base.en",    "3d3d5dee26484f91867d81cb899cfcf72b96be6c"),
 }
 
 def _resolve_whisper(name: str) -> str:
-    """Return local snapshot path if cached, else return name for HF download."""
-    p = _WHISPER_CACHE.get(name)
-    return p if p and os.path.isdir(p) else name
+    """Priority: project models/ → HF cache → HF auto-download."""
+    entry = _WHISPER_NAMES.get(name)
+    if entry:
+        local_folder, hf_folder, snapshot = entry
+        # 1. project-local models/ folder
+        p = os.path.join(_LOCAL_MODELS, local_folder)
+        if os.path.isdir(p):
+            return p
+        # 2. HF cache snapshot
+        p = os.path.join(_HF, hf_folder, "snapshots", snapshot)
+        if os.path.isdir(p):
+            return p
+    # 3. Let faster-whisper download from HF
+    return name
 
 _MODEL_NAME: str = _resolve_whisper(os.getenv("WHISPER_MODEL", "large-v3"))
 

@@ -67,8 +67,8 @@ ASCII EXECUTION FLOW
 """
 
 import io
-import logging
 import os
+import sys
 import tempfile
 from pathlib import Path
 
@@ -78,8 +78,14 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
-logger = logging.getLogger("voice_cloner")
+# ── Shared logging setup ──────────────────────────────────────────────────────
+_SERVICES_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _SERVICES_DIR not in sys.path:
+    sys.path.insert(0, _SERVICES_DIR)
+
+from log_utils import setup_logger, log_execution   # noqa: E402
+
+logger = setup_logger("voice_cloner")
 
 app = FastAPI(title="Voice Cloner", version="1.0.0")
 app.add_middleware(
@@ -92,11 +98,21 @@ app.add_middleware(
 # ---------------------------------------------------------------------------
 # Model paths — use local HF cache, never re-download
 # ---------------------------------------------------------------------------
+_PROJ     = Path(__file__).parent.parent.parent
+_LOCAL    = _PROJ / "models"
 _HF_CACHE = Path(os.path.expanduser("~/.cache/huggingface/hub"))
+
+def _resolve_model(local_name: str, hf_folder: str, snapshot: str) -> Path:
+    p = _LOCAL / local_name
+    if p.is_dir():
+        return p
+    p = _HF_CACHE / hf_folder / "snapshots" / snapshot
+    return p  # may not exist — chatterbox.from_pretrained will download
+
 _MODEL_DIRS = {
-    "standard":     _HF_CACHE / "models--ResembleAI--chatterbox"        / "snapshots" / "05e904af2b5c7f8e482687a9d7336c5c824467d9",
-    "turbo":        _HF_CACHE / "models--ResembleAI--chatterbox-turbo"   / "snapshots" / "749d1c1a46eb10492095d68fbcf55691ccf137cd",
-    "multilingual": _HF_CACHE / "models--ResembleAI--chatterbox"        / "snapshots" / "05e904af2b5c7f8e482687a9d7336c5c824467d9",
+    "standard":     _resolve_model("chatterbox",       "models--ResembleAI--chatterbox",       "05e904af2b5c7f8e482687a9d7336c5c824467d9"),
+    "turbo":        _resolve_model("chatterbox-turbo",  "models--ResembleAI--chatterbox-turbo", "749d1c1a46eb10492095d68fbcf55691ccf137cd"),
+    "multilingual": _resolve_model("chatterbox",        "models--ResembleAI--chatterbox",       "05e904af2b5c7f8e482687a9d7336c5c824467d9"),
 }
 
 # ---------------------------------------------------------------------------
@@ -168,6 +184,7 @@ def _tensor_to_wav_bytes(wav: torch.Tensor, sr: int = 24_000) -> bytes:
 # ---------------------------------------------------------------------------
 
 @app.get("/health")
+@log_execution(rate_limit=60)
 async def health():
     from chatterbox.mtl_tts import SUPPORTED_LANGUAGES
     return {
@@ -180,6 +197,7 @@ async def health():
 
 
 @app.post("/preview")
+@log_execution
 async def preview(reference: UploadFile = File(...)):
     """Validate reference audio and return its duration — no generation."""
     suffix = Path(reference.filename or "ref.wav").suffix or ".wav"
@@ -198,6 +216,7 @@ async def preview(reference: UploadFile = File(...)):
 
 
 @app.post("/generate")
+@log_execution
 async def generate(
     reference:   UploadFile = File(...,   description="Reference audio 10–60 s"),
     text:        str        = Form(...,   description="Text to synthesize"),

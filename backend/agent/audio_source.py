@@ -11,7 +11,7 @@
 # +-------------------------------+
 #    |
 #    |----> <AudioSource> -> __init__()
-#    |        * create 48 kHz source
+#    |        * create LiveKit audio source
 #    |
 #    v
 # +-------------------------------+
@@ -38,7 +38,7 @@
 #    |        * convert sample format
 #    |
 #    |----> <Queue> -> put_nowait()
-#    |        * enqueue 20 ms chunks
+#    |        * enqueue audio chunks
 #    |
 #    v
 # +-------------------------------+
@@ -47,10 +47,10 @@
 # +-------------------------------+
 #    |
 #    |----> <Queue> -> get()
-#    |        * read next audio chunk
+#    |        * dequeue next audio chunk
 #    |
 #    |----> <AudioSource> -> capture_frame()
-#    |        * push frame into room
+#    |        * push frame to LiveKit
 #    |
 #    v
 # +-------------------------------+
@@ -59,7 +59,7 @@
 # +-------------------------------+
 #    |
 #    |----> <Queue> -> get_nowait()
-#    |        * drain all queued frames
+#    |        * drain queued frames
 #    |
 #    v
 # +-------------------------------+

@@ -13,7 +13,7 @@
 #    |----> <AudioBuf> -> __init__()
 #    |        * create VAD buffer instance
 #    |
-#    |----> <asyncio.Lock> -> __init__()
+#    |----> <Lock> -> __init__()
 #    |        * create turn serialization lock
 #    |
 #    v

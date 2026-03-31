@@ -11,7 +11,7 @@
 # +-------------------------------------------+
 #     |
 #     |----> getattr()
-#     |        * extract start, end, text per segment
+#     |        * extract start, end, text
 #     |
 #     |----> max()
 #     |        * compute overlap start
@@ -20,12 +20,17 @@
 #     |        * compute overlap end
 #     |
 #     |----> append()
-#     |        * build result with matched speaker label
+#     |        * build result with speaker label
 #     |
 #     v
-# [ RETURN List[dict]: speaker, start, end, text ]
+# [ RETURN List[dict] ]
 #
 # ================================================================
+
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 def merge_transcription_and_diarization(whisper_segments, diarization_segments):
     final_output = []

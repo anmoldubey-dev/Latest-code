@@ -10,7 +10,7 @@
 # | * detect device at startup    |
 # +-------------------------------+
 #    |
-#    |----> torch.cuda.is_available()
+#    |----> is_available()
 #    |        * pick CUDA or CPU device
 #    |
 #    v
@@ -22,7 +22,7 @@
 #    |----> <Pipeline> -> from_pretrained()
 #    |        * lazy-load pyannote pipeline
 #    |
-#    |----> pipeline()
+#    |----> <Pipeline> -> __call__()
 #    |        * run speaker diarization
 #    |
 #    |----> itertracks()
@@ -34,17 +34,29 @@
 # ================================================================
 
 import os
+import sys
+
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from pyannote.audio import Pipeline
 import torch
 
+# ── Shared logging setup ──────────────────────────────────────────────────────
+_SERVICES_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _SERVICES_DIR not in sys.path:
+    sys.path.insert(0, _SERVICES_DIR)
+
+from log_utils import setup_logger, log_execution   # noqa: E402
+
+logger = setup_logger("diarization")
+
 # 1. Initialize App
 app = FastAPI(title="Diarization Microservice")
 
 # 2. Global Model Storage
 pipeline = None
+
 
 # --------------------------------------------------
 # Pydantic request model for /diarize endpoint (file_path + hf_token)
@@ -53,46 +65,23 @@ class AudioRequest(BaseModel):
     file_path: str
     hf_token: str  # Pass token securely
 
+
 # --------------------------------------------------
 # Detect compute device at startup; pipeline loaded lazily on first request
-# Flow:
-#   startup event
-#     ||
-#   torch.cuda check
-#     ||
-#   device set; pipeline stays None
 # --------------------------------------------------
 @app.on_event("startup")
+@log_execution
 def load_model():
     global pipeline
-    print("🔹 [Microservice] Loading Pyannote Pipeline...")
-
-    # Use CPU by default for safety, or 'cuda' if available
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"🔹 [Microservice] Running on: {device}")
+    logger.info("[Diarization] startup  device=%s  pipeline=lazy", device)
 
-    try:
-        # We load the pipeline logic but wait for the first request's token
-        # OR hardcode the token here if you prefer.
-        # Ideally, we load it here to save time.
-        # NOTE: You must export HF_TOKEN in your env or pass it.
-        # For simplicity in this microservice, let's assume valid token env var or passing it.
-        pass
-    except Exception as e:
-        print(f"❌ [Microservice] Model Init Error: {e}")
 
 # --------------------------------------------------
 # Run pyannote speaker diarization on audio file, return speaker segments
-# Flow:
-#   AudioRequest (file_path, hf_token)
-#     ||
-#   Lazy-load pyannote Pipeline
-#     ||
-#   Run inference
-#     ||
-#   Return [{start,end,speaker}]
 # --------------------------------------------------
 @app.post("/diarize")
+@log_execution
 async def diarize_audio(request: AudioRequest):
     global pipeline
 
@@ -100,9 +89,8 @@ async def diarize_audio(request: AudioRequest):
         raise HTTPException(status_code=404, detail="Audio file not found on disk.")
 
     try:
-        # Lazy loading / Auth check
         if pipeline is None:
-            print("🔹 [Microservice] Initializing Pipeline with Token...")
+            logger.info("[Diarization] lazy-loading pipeline with provided token")
             pipeline = Pipeline.from_pretrained(
                 "pyannote/speaker-diarization-3.1",
                 use_auth_token=request.hf_token
@@ -110,25 +98,24 @@ async def diarize_audio(request: AudioRequest):
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
             pipeline.to(device)
 
-        # Run Inference
-        print(f"🔹 [Microservice] Processing: {request.file_path}")
+        logger.info("[Diarization] processing  file=%s", request.file_path)
         diarization = pipeline(request.file_path)
 
-        # Format Response
         segments = []
         for turn, _, speaker in diarization.itertracks(yield_label=True):
             segments.append({
-                "start": turn.start,
-                "end": turn.end,
-                "speaker": speaker
+                "start":   turn.start,
+                "end":     turn.end,
+                "speaker": speaker,
             })
 
+        logger.info("[Diarization] done  segments=%d", len(segments))
         return {"segments": segments}
 
-    except Exception as e:
-        print(f"❌ [Microservice] Error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as exc:
+        logger.exception("[Diarization] inference error: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
 
 if __name__ == "__main__":
-    # Run on Port 8001 to avoid conflict with Main Backend (8000)
     uvicorn.run(app, host="127.0.0.1", port=8001)

@@ -85,26 +85,30 @@ class TTSEngine:
         from transformers import AutoTokenizer
         from parler_tts import ParlerTTSForConditionalGeneration
 
-        # ── Local HuggingFace cache snapshot map ────────────────────────────
+        # ── Model resolution: project models/ → HF cache → HF download ────
+        _PROJ = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
+        _LOCAL = os.path.join(_PROJ, "models")
         _HF = os.path.join(os.path.expanduser("~"), ".cache", "huggingface", "hub")
         _CACHE_MAP = {
-            "ai4bharat/indic-parler-tts": os.path.join(
-                _HF, "models--ai4bharat--indic-parler-tts",
-                "snapshots", "7b527af5ee8ed1f9a28d80b19703ed9bb8ba10ca",
-            ),
-            "google/flan-t5-large": os.path.join(
-                _HF, "models--google--flan-t5-large",
-                "snapshots", "0613663d0d48ea86ba8cb3d7a44f0f65dc596a2a",
-            ),
-            "google/flan-t5-base": os.path.join(
-                _HF, "models--google--flan-t5-base",
-                "snapshots", "7bcac572ce56db69c1ea7c8af255c5d7c9672fc2",
-            ),
+            "ai4bharat/indic-parler-tts": [
+                os.path.join(_LOCAL, "indic-parler-tts"),
+                os.path.join(_HF, "models--ai4bharat--indic-parler-tts", "snapshots", "7b527af5ee8ed1f9a28d80b19703ed9bb8ba10ca"),
+            ],
+            "google/flan-t5-large": [
+                os.path.join(_LOCAL, "flan-t5-large"),
+                os.path.join(_HF, "models--google--flan-t5-large", "snapshots", "0613663d0d48ea86ba8cb3d7a44f0f65dc596a2a"),
+            ],
+            "google/flan-t5-base": [
+                os.path.join(_LOCAL, "flan-t5-base"),
+                os.path.join(_HF, "models--google--flan-t5-base", "snapshots", "7bcac572ce56db69c1ea7c8af255c5d7c9672fc2"),
+            ],
         }
 
         def _resolve(name: str):
-            p = _CACHE_MAP.get(name)
-            return (p, True) if p and os.path.isdir(p) else (name, False)
+            for p in _CACHE_MAP.get(name, []):
+                if os.path.isdir(p):
+                    return (p, True)
+            return (name, False)
 
         model_path, model_local = _resolve(self.model_name)
         logger.info("Loading model: %s (local=%s) on %s", model_path, model_local, self.device)

@@ -39,27 +39,25 @@
 #
 # ================================================================
 
-import logging
 import os
 import sys
+import time
 from contextlib import asynccontextmanager
+from datetime import datetime
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 TRANSLATOR_ROOT = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.dirname(TRANSLATOR_ROOT)
+PROJECT_ROOT    = os.path.dirname(TRANSLATOR_ROOT)   # = services/
 
 for _p in (TRANSLATOR_ROOT, PROJECT_ROOT):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    datefmt="%H:%M:%S",
-)
-logger = logging.getLogger(__name__)
+from log_utils import setup_logger, log_execution   # noqa: E402  (needs sys.path above)
+
+logger = setup_logger("translator")
 
 # All languages supported by facebook/m2m100_418M
 LANGUAGES: dict[str, str] = {
@@ -95,19 +93,18 @@ models: dict = {}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("═" * 60)
-    logger.info("  Translator Service — model loading …")
-    logger.info("═" * 60)
+    _t0 = time.perf_counter()
+    logger.info("[START] lifespan  at=%s", datetime.now().strftime("%H:%M:%S"))
 
     logger.info("[1/1] Loading M2M-100 translation model …")
     from translation.translator_engine import TranslatorEngine
     models["translator"] = TranslatorEngine()
     logger.info("[1/1] Translation ready.")
 
-    logger.info("═" * 60)
-    logger.info("  Model loaded.  Listening on http://localhost:8002")
-    logger.info("═" * 60)
-
+    logger.info(
+        "[END]   lifespan  elapsed=%.3fs  — translator ready on http://localhost:8002",
+        time.perf_counter() - _t0,
+    )
     yield
 
     models.clear()
@@ -125,6 +122,7 @@ app.add_middleware(
 
 
 @app.get("/health")
+@log_execution(rate_limit=60)
 async def health() -> dict:
     return {
         "status": "ok",
@@ -133,11 +131,13 @@ async def health() -> dict:
 
 
 @app.get("/languages")
+@log_execution
 async def languages() -> dict:
     return {"languages": LANGUAGES}
 
 
 @app.post("/translate")
+@log_execution
 async def http_translate(request: Request) -> dict:
     """
     Text-to-text translation endpoint for backend integration.

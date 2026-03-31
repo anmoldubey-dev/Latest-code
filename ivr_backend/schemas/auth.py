@@ -10,33 +10,17 @@
 # | * POST /auth/login request body  |
 # +----------------------------------+
 #     |
-#     |----> username                * login identifier field
-#     |
-#     |----> password                * plain text password field
-#     |
 #     v
 # +----------------------------------+
 # | TokenResponse()                  |
 # | * JWT auth response model        |
 # +----------------------------------+
 #     |
-#     |----> access_token            * signed HS256 JWT string
-#     |
-#     |----> token_type              * bearer string
-#     |
-#     |----> role                    * user or admin
-#     |
-#     |----> username                * authenticated user name
-#     |
-#     |----> user_id                 * authenticated user ID
-#     |
 #     v
 # +----------------------------------+
 # | UserResponse()                   |
 # | * GET /auth/me profile model     |
 # +----------------------------------+
-#     |
-#     |----> id / username / email / role / is_active  * profile fields
 #
 # ================================================================
 

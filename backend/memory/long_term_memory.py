@@ -1,3 +1,77 @@
+# ================================================================
+# FILE EXECUTION FLOW
+# ================================================================
+#
+# [ START ]
+#     |
+#     v
+# +---------------------------+
+# | __init__()                |
+# | * open SQLite, init schema|
+# +---------------------------+
+#     |
+#     |----> _connect()
+#     |        * open SQLite connection
+#     |
+#     |----> _init_db()
+#     |        * create tables and indexes
+#     |
+#     v
+# +---------------------------+
+# | upsert_customer()         |
+# | * create or update caller |
+# +---------------------------+
+#     |
+#     v
+# +---------------------------+
+# | save_call_record()        |
+# | * persist post-call data  |
+# +---------------------------+
+#     |
+#     |----> upsert_customer()
+#     |        * update caller total_calls
+#     |
+#     v
+# +---------------------------+
+# | get_customer()            |
+# | * fetch customer profile  |
+# +---------------------------+
+#     |
+#     v
+# +---------------------------+
+# | get_call_history()        |
+# | * last N call summaries   |
+# +---------------------------+
+#     |
+#     v
+# +---------------------------+
+# | get_customer_context()    |
+# | * build LLM context string|
+# +---------------------------+
+#     |
+#     |----> get_customer()
+#     |        * fetch customer row
+#     |
+#     |----> get_call_history()
+#     |        * fetch recent records
+#     |
+#     v
+# +---------------------------+
+# | stats()                   |
+# | * return DB stats         |
+# +---------------------------+
+#     |
+#     v
+# +---------------------------+
+# | get_long_term_memory()    |
+# | * singleton factory       |
+# +---------------------------+
+#     |
+#     v
+# [ END ]
+#
+# ================================================================
+
 """
 long_term_memory
 ================
