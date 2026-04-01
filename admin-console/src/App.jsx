@@ -38,6 +38,8 @@ import RBAC            from './pages/RBAC.jsx'
 import AvatarManager   from './pages/AvatarManager.jsx'
 import Analytics       from './pages/Analytics.jsx'
 import Translator      from './pages/Translator.jsx'
+import CallSessions    from './pages/CallSessions.jsx'
+import RagSearch       from './pages/RagSearch.jsx'
 
 export default function App() {
   return (
@@ -57,6 +59,8 @@ export default function App() {
         <Route path="/avatars"    element={<AvatarManager />} />
         <Route path="/analytics"   element={<Analytics />} />
         <Route path="/translator"  element={<Translator />} />
+        <Route path="/sessions"    element={<CallSessions />} />
+        <Route path="/rag-search"  element={<RagSearch />} />
       </Routes>
     </Layout>
   )

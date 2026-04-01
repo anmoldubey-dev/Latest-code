@@ -1,0 +1,62 @@
+{
+"neo4j": {
+"uri": "bolt://localhost:7687",
+"user": "neo4j",
+"password": "Sahil@123",
+"database": "neo4j",
+"max_connection_lifetime": 3600,
+"max_connection_pool_size": 50,
+"connection_timeout": 30,
+"encrypted": false
+},
+"graph_build": {
+"enabled": true,
+"auto_start_after_forward": true,
+"batch_size": 1000,
+"max_workers": 4,
+"chunk_size": 500
+},
+"similarity_linking": {
+"enabled": true,
+"cosine_threshold": 0.75,
+"max_edges_per_node": 10,
+"batch_size": 500
+},
+"knowledge_graph": {
+"enabled": false,
+"entity_extraction": true,
+"spacy_model": "en_core_web_sm",
+"extract_organizations": true,
+"extract_locations": true,
+"extract_persons": true,
+"min_entity_confidence": 0.7
+},
+"rag_integration": {
+"use_graph": true,
+"max_graph_hops": 2,
+"include_similar_nodes": true,
+"include_structural_neighbors": true,
+"max_neighbor_nodes": 5
+},
+"checkpoint": {
+"db_path": "./graph_checkpoint.db",
+"enable_wal": true
+},
+"notes": {
+"neo4j.uri": "Neo4j Bolt connection URI (bolt://host:port)",
+"neo4j.user": "Neo4j database username",
+"neo4j.password": "Neo4j database password",
+"neo4j.database": "Target database name (default: neo4j)",
+"graph_build.enabled": "Set to true to enable graph building",
+"graph_build.auto_start_after_forward": "If true, graph build starts automatically after forward pipeline completes",
+"similarity_linking.cosine_threshold": "Minimum cosine similarity (0-1) to create SIMILAR_TO edge",
+"knowledge_graph.enabled": "Enable entity extraction and semantic relationships (requires spaCy)",
+"rag_integration.use_graph": "Enable graph-enhanced RAG retrieval"
+},
+"requirements": [
+"Neo4j server running (Community or Enterprise Edition)",
+"neo4j Python driver: pip install neo4j",
+"For knowledge graph: pip install spacy && python -m spacy download en_core_web_sm",
+"pgvector with embeddings already built (forward pipeline completed)"
+]
+}

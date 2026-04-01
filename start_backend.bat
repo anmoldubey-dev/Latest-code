@@ -8,6 +8,8 @@ set KMP_DUPLICATE_LIB_OK=TRUE
 set WHISPER_MODEL=large-v3
 set STT_LANGUAGE=en
 set OLLAMA=false
+set SMART_RAG=true
+set RAG_TABLES=users,conversation_turns
 
 for /f "usebackq tokens=1,* delims== eol=#" %%A in ("services.config") do (
     set "_val=%%B"
@@ -24,6 +26,8 @@ echo   Configuration loaded from services.config:
 echo     WHISPER_MODEL     = %WHISPER_MODEL%
 echo     STT_LANGUAGE      = %STT_LANGUAGE%
 echo     OLLAMA            = %OLLAMA%
+echo     SMART_RAG         = %SMART_RAG%
+echo     RAG_TABLES        = %RAG_TABLES%
 echo.
 echo   ^(change these in services.config and restart^)
 echo  ================================================

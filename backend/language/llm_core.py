@@ -65,16 +65,26 @@ logger = logging.getLogger("callcenter.llm")
 
 def _build_final_system(lang: str, voice_name: str) -> str:
     base = build_system_prompt(lang, voice_name)
+    parts = [base]
+
     company_context = _m.get("company_context", "")
     if company_context:
-        return (
-            f"{base}\n\n"
+        parts.append(
             f"Company Knowledge Base:\n{company_context}\n\n"
             "Use the above company information to answer accurately. "
             "Do not mention that you are reading from a document. "
             "If the user asks something unrelated to company info, respond normally."
         )
-    return base
+
+    rag_context = _m.get("rag_context", "")
+    if rag_context:
+        parts.append(f"Relevant context for this query:\n{rag_context}")
+
+    customer_context = _m.get("customer_context", "")
+    if customer_context:
+        parts.append(customer_context)
+
+    return "\n\n".join(parts)
 
 
 def _gemini_sync(history: List[dict], lang: str, voice_name: str) -> str:
@@ -116,15 +126,26 @@ def _build_qwen_system(lang: str, voice_name: str) -> str:
     language_rule = LANGUAGE_CONFIG.get(lang, {}).get(
         "llm_rule", "Reply in the same language the user is speaking."
     )
-    company_context = _m.get("company_context", "")
     base = (
         f"You are {agent_name}, a human call center agent at SR Comsoft. "
         f"{language_rule} "
         "Reply in 1-2 short sentences. Never say you are AI. Be natural."
     )
+    parts = [base]
+
+    company_context = _m.get("company_context", "")
     if company_context:
-        return f"{base}\n\nCompany info: {company_context[:500]}"
-    return base
+        parts.append(f"Company info: {company_context[:500]}")
+
+    rag_context = _m.get("rag_context", "")
+    if rag_context:
+        parts.append(f"Relevant context: {rag_context[:400]}")
+
+    customer_context = _m.get("customer_context", "")
+    if customer_context:
+        parts.append(customer_context[:300])
+
+    return "\n\n".join(parts)
 
 
 def _qwen_sync(history: List[dict], lang: str, voice_name: str) -> str:

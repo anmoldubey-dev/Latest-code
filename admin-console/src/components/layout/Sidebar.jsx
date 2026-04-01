@@ -26,7 +26,7 @@ import { NavLink, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, Activity, Mic2, Globe2,
   Languages, Database, Radio, BrainCircuit, Settings, Cpu,
-  ShieldCheck, UserCircle2, BarChart3,
+  ShieldCheck, UserCircle2, BarChart3, PhoneCall, Search,
 } from 'lucide-react'
 
 const NAV = [
@@ -37,6 +37,8 @@ const NAV = [
   { to: '/stt',        label: 'STT Diagnostics',  icon: Radio },
   { to: '/translator', label: 'Translator',        icon: Languages },
   { to: '/languages',  label: 'Language Config',  icon: Globe2 },
+  { to: '/sessions',   label: 'Call Sessions',     icon: PhoneCall },
+  { to: '/rag-search', label: 'RAG Search',        icon: Search },
   { to: '/memory',     label: 'Memory Explorer',  icon: Database },
   { to: '/livekit',    label: 'Live Sessions',    icon: Globe2 },
   { to: '/llm',        label: 'LLM Config',       icon: BrainCircuit },

@@ -9,6 +9,7 @@ const SERVICES = {
   diarization:  '/api/diarization',
   translator:   '/api/translator',
   voiceCloner:  '/api/voice-cloner',
+  haupRag:      'http://localhost:8080',
 }
 
 async function request(base, path, options = {}) {
@@ -95,6 +96,12 @@ export const voiceClonerApi = {
   generate: (formData) => fetch(`${SERVICES.voiceCloner}/generate`, { method: 'POST', body: formData }),
 }
 
+// ── HAUP RAG :8080 ──────────────────────────────────────────────
+export const haupRagApi = {
+  health:   () => request(SERVICES.haupRag, '/health', { timeout: 3000 }).catch(() => ({ status: 'offline' })),
+  sessions: () => request(SERVICES.haupRag, '/sessions', { timeout: 5000 }).catch(() => ({ sessions: [] })),
+}
+
 // ── Multi-service health check ──────────────────────────────────
 export async function checkAllHealth() {
   const checks = await Promise.allSettled([
@@ -104,9 +111,10 @@ export async function checkAllHealth() {
     ttsGlobalApi.health().then(d   => ({ name: 'TTS Global',    port: 8003, ...d, ok: true })),
     ttsIndicApi.health().then(d    => ({ name: 'TTS Indic',     port: 8004, ...d, ok: true })),
     voiceClonerApi.health().then(d => ({ name: 'Voice Cloner',  port: 8005, ...d, ok: true })),
+    haupRagApi.health().then(d     => ({ name: 'HAUP RAG',      port: 8080, ...d, ok: d?.status === 'ok' })),
   ])
-  const names = ['Backend', 'Diarization', 'Translator', 'TTS Global', 'TTS Indic', 'Voice Cloner']
-  const ports = [8000, 8001, 8002, 8003, 8004, 8005]
+  const names = ['Backend', 'Diarization', 'Translator', 'TTS Global', 'TTS Indic', 'Voice Cloner', 'HAUP RAG']
+  const ports = [8000, 8001, 8002, 8003, 8004, 8005, 8080]
   return checks.map((c, i) => {
     if (c.status === 'fulfilled') return c.value
     return { name: names[i], port: ports[i], status: 'offline', ok: false, error: c.reason?.message }

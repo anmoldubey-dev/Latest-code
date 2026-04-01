@@ -1,155 +1,168 @@
 // ================================================================
-// FILE EXECUTION FLOW
-// ================================================================
-//
-// [ START ]
-//     |
-//     v
-// +---------------------------+
-// | MemoryCard()              |
-// | * expandable memory entry |
-// +---------------------------+
-//     |
-//     v
-// +---------------------------+
-// | MemoryExplorer()          |
-// | * FAISS index browser     |
-// +---------------------------+
-//     |
-//     |----> handleDelete()
-//     |        * removes entry from state
-//     |
-//     |----> clearAll()
-//     |        * wipes all memories
-//     |
-//     |----> MemoryCard()
-//     |        * renders each memory turn
-//     |
-//     v
-// [ END ]
-//
+// MemoryExplorer — HAUP v3.0 RAG + live pgvector conversation turns
 // ================================================================
 
-import React, { useState } from 'react'
-import { Search, Database, Trash2, MessageSquare, Clock } from 'lucide-react'
-import Btn from '../components/ui/Btn.jsx'
+import React, { useState, useEffect, useCallback } from 'react'
+import { Search, Database, MessageSquare, Clock, Layers, Zap, CheckCircle, XCircle, RefreshCw, AlertCircle, Mic, Bot } from 'lucide-react'
 import SectionHeader from '../components/ui/SectionHeader.jsx'
+import Btn from '../components/ui/Btn.jsx'
 
-// FAISS memory explorer — calls backend /api/memory endpoints when available
-// Displays conversation history stored in the FAISS vector index
+const BACKEND = '/api/backend'
+const LANG_NAMES = { en: 'English', hi: 'Hindi', mr: 'Marathi', ta: 'Tamil', te: 'Telugu', bn: 'Bengali', gu: 'Gujarati', pa: 'Punjabi' }
 
-const MOCK_MEMORIES = [
-  { id: 1, user: 'My internet is not working since morning', ai: "I'm sorry to hear that. Let me check your account status. Can you confirm your account number?", lang: 'en', ts: '2026-03-21T09:15:32' },
-  { id: 2, user: 'वेबसाइट खुल नहीं रही है', ai: 'मुझे खेद है। कृपया अपना account number बताएं, मैं जांच करती हूँ।', lang: 'hi', ts: '2026-03-21T09:18:44' },
-  { id: 3, user: 'Password reset nahi ho raha', ai: 'Aapko ek reset link bhejti hoon registered email par. Kya email ID sahi hai?', lang: 'hi', ts: '2026-03-21T09:22:10' },
-  { id: 4, user: 'billing issue regarding last month invoice', ai: "I can see a discrepancy in your invoice. I'll raise a ticket and our billing team will contact you within 24 hours.", lang: 'en', ts: '2026-03-21T09:45:00' },
-  { id: 5, user: 'app download nahi hota mobile pe', ai: 'Play Store pe Voice AI app available hai. Apna Android version check karein — 8.0+ chahiye.', lang: 'hi', ts: '2026-03-21T10:05:20' },
+// ── Static info cards ─────────────────────────────────────────
+const RAG_STATS = [
+  { label: 'RAG Backend',   value: 'HAUP v3.0',  color: 'var(--cyan)',   icon: Layers },
+  { label: 'Vector Store',  value: 'pgvector',   color: 'var(--purple)', icon: Database },
+  { label: 'Session Port',  value: ':8080',       color: 'var(--green)',  icon: Zap },
+  { label: 'Turn Memory',   value: 'Neon DB',     color: 'var(--yellow)', icon: Database },
 ]
 
-const LANG_NAMES = { en: 'English', hi: 'Hindi', mr: 'Marathi', ta: 'Tamil', te: 'Telugu' }
+// ── How HAUP works ────────────────────────────────────────────
+function HaupInfoPanel() {
+  return (
+    <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '16px 18px', marginBottom: 20 }}>
+      <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--cyan)', marginBottom: 10 }}>
+        HAUP v3.0 RAG — How it works
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        {[
+          { step: '1. Session Create', desc: 'Each call POSTs to /sessions → gets a session_id scoped to that call.' },
+          { step: '2. Query (per turn)', desc: 'Each user utterance POSTs to /sessions/{id}/ask with the user text as query.' },
+          { step: '3. Vector Retrieval', desc: 'HAUP embeds the query, searches pgvector for similar rows from the source Neon DB table.' },
+          { step: '4. Answer Synthesis', desc: 'Retrieved rows are passed to Ollama/OpenAI/Anthropic → returns answer + citations.' },
+          { step: '5. LLM Injection', desc: 'The answer string is injected into the Gemini/Qwen system prompt as "Relevant context".' },
+          { step: '6. Session Delete', desc: 'On call end, DELETE /sessions/{id} cleans up HAUP session state and cache.' },
+        ].map(({ step, desc }) => (
+          <div key={step} style={{ display: 'flex', gap: 10 }}>
+            <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--cyan)', flexShrink: 0, marginTop: 5 }} />
+            <div>
+              <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>{step}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{desc}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div style={{ marginTop: 12, padding: '8px 10px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+        <strong style={{ color: 'var(--text-primary)' }}>Input:</strong> User speech text (Whisper STT).{' '}
+        <strong style={{ color: 'var(--text-primary)' }}>Output:</strong> Answer injected into LLM system prompt.{' '}
+        <strong style={{ color: 'var(--text-primary)' }}>Config:</strong>{' '}
+        <code style={{ fontFamily: 'var(--font-mono)', color: 'var(--cyan)' }}>SahilRagSystem/haup/.env</code>
+      </div>
+    </div>
+  )
+}
 
-function MemoryCard({ item, onDelete }) {
-  const [expanded, setExpanded] = useState(false)
-  const date = new Date(item.ts)
-  const timeStr = date.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+// ── HAUP health check ─────────────────────────────────────────
+function HaupHealthBadge() {
+  const [status, setStatus] = useState('unknown')
+
+  async function check() {
+    setStatus('checking')
+    try {
+      const res = await fetch('/api/backend/haup/health', { signal: AbortSignal.timeout(4000) })
+      const data = res.ok ? await res.json().catch(() => ({})) : {}
+      setStatus(data.status === 'ok' ? 'ok' : 'offline')
+    } catch {
+      setStatus('offline')
+    }
+  }
+
+  const color = status === 'ok' ? 'var(--green)' : status === 'offline' ? '#e05252' : 'var(--text-muted)'
+  const Icon  = status === 'ok' ? CheckCircle : XCircle
 
   return (
-    <div style={{
-      background: 'var(--bg-surface)',
-      border: '1px solid var(--border)',
-      borderRadius: 'var(--radius-lg)',
-      overflow: 'hidden',
-      transition: 'border-color var(--t-fast)',
-    }}
-    onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--border-strong)'}
-    onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
-    >
-      <div style={{ padding: '12px 16px', display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer' }}
-        onClick={() => setExpanded(e => !e)}>
-        <div style={{
-          width: 32, height: 32, borderRadius: 8, flexShrink: 0,
-          background: 'var(--cyan-dim)', border: '1px solid var(--border-cyan)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>
-          <MessageSquare size={13} style={{ color: 'var(--cyan)' }} />
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 12.5, color: 'var(--text-primary)', lineHeight: 1.5 }} className="truncate">
-            {item.user}
-          </div>
-          {!expanded && (
-            <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', marginTop: 3, lineHeight: 1.4 }} className="truncate">
-              AI: {item.ai}
-            </div>
-          )}
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
-          <span style={{ fontSize: 10, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 3 }}>
-            <Clock size={9} />{timeStr}
-          </span>
-          <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 3, background: 'var(--bg-elevated)', color: 'var(--cyan)', fontFamily: 'var(--font-mono)' }}>
-            {LANG_NAMES[item.lang] ?? item.lang}
-          </span>
-        </div>
-      </div>
-
-      {expanded && (
-        <div style={{ padding: '0 16px 14px 60px', borderTop: '1px solid var(--border)', paddingTop: 12 }}>
-          <div style={{ marginBottom: 10 }}>
-            <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 5 }}>User</div>
-            <div style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.6 }}>{item.user}</div>
-          </div>
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 5 }}>AI Response</div>
-            <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>{item.ai}</div>
-          </div>
-          <Btn variant="danger" size="sm" icon={Trash2} onClick={() => onDelete(item.id)}>Remove from index</Btn>
-        </div>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <button onClick={check} style={{ fontSize: 11, padding: '4px 10px', borderRadius: 6, background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+        Check HAUP :8080
+      </button>
+      {status !== 'unknown' && (
+        <span style={{ fontSize: 11, color, display: 'flex', alignItems: 'center', gap: 4 }}>
+          <Icon size={11} />
+          {status === 'ok' ? 'Reachable' : status === 'checking' ? '…' : 'Offline'}
+        </span>
       )}
     </div>
   )
 }
 
+// ── Live turn card ────────────────────────────────────────────
+function TurnCard({ item }) {
+  const isUser = item.role === 'user'
+  const timeStr = item.ts ? new Date(item.ts).toLocaleString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'
+  return (
+    <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '10px 14px', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+      <div style={{
+        width: 26, height: 26, borderRadius: 7, flexShrink: 0,
+        background: isUser ? 'var(--cyan-dim)' : 'rgba(120,80,200,0.15)',
+        border: `1px solid ${isUser ? 'var(--border-cyan)' : 'rgba(120,80,200,0.3)'}`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        {isUser ? <Mic size={11} style={{ color: 'var(--cyan)' }} /> : <Bot size={11} style={{ color: 'var(--purple)' }} />}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 3, display: 'flex', gap: 8, alignItems: 'center' }}>
+          <span style={{ textTransform: 'uppercase', letterSpacing: '0.06em' }}>{isUser ? 'Caller' : 'Agent'}</span>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5 }}>{item.session_id?.slice(0, 8)}…</span>
+          <span style={{ color: 'var(--cyan)', fontSize: 9.5 }}>{LANG_NAMES[item.lang] ?? item.lang}</span>
+          <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 3 }}><Clock size={9} />{timeStr}</span>
+        </div>
+        <div style={{ fontSize: 12.5, color: 'var(--text-primary)', lineHeight: 1.55, background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', padding: '5px 9px', border: '1px solid var(--border)' }}>
+          {item.text}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Main page ─────────────────────────────────────────────────
 export default function MemoryExplorer() {
-  const [memories, setMemories] = useState(MOCK_MEMORIES)
-  const [query, setQuery] = useState('')
-  const [loading, setLoading] = useState(false)
+  const [query, setQuery]     = useState('')
+  const [turns, setTurns]     = useState([])
+  const [total, setTotal]     = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [error, setError]     = useState(null)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch(`${BACKEND}/api/turns?limit=200`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = await res.json()
+      setTurns(data.turns || [])
+      setTotal(data.total || 0)
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { load() }, [load])
 
   const filtered = query
-    ? memories.filter(m =>
-        m.user.toLowerCase().includes(query.toLowerCase()) ||
-        m.ai.toLowerCase().includes(query.toLowerCase())
-      )
-    : memories
-
-  function handleDelete(id) {
-    setMemories(m => m.filter(x => x.id !== id))
-  }
-
-  function clearAll() {
-    if (confirm('Clear entire FAISS conversation memory index?')) {
-      setMemories([])
-    }
-  }
+    ? turns.filter(t => t.text?.toLowerCase().includes(query.toLowerCase()))
+    : turns
 
   return (
     <div className="animate-fade-in">
       <SectionHeader
         title="Memory Explorer"
-        subtitle="FAISS vector index — conversation history (all-MiniLM-L6-v2 embeddings)"
-        action={<Btn variant="danger" icon={Trash2} onClick={clearAll}>Clear Index</Btn>}
+        subtitle="HAUP v3.0 RAG (pgvector) · live conversation turns from Neon"
+        action={
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <HaupHealthBadge />
+            <Btn icon={RefreshCw} onClick={load} disabled={loading}>Refresh</Btn>
+          </div>
+        }
       />
 
-      {/* Index stats */}
+      {/* Stats strip */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 20 }}>
-        {[
-          { label: 'Stored Turns',    value: memories.length,  color: 'var(--cyan)'   },
-          { label: 'Index Path',      value: 'faiss_index/',   color: 'var(--purple)' },
-          { label: 'Embedding Dim',   value: '384',            color: 'var(--green)'  },
-          { label: 'Search k',        value: '2',              color: 'var(--yellow)' },
-        ].map(({ label, value, color }) => (
+        {RAG_STATS.map(({ label, value, color, icon: Icon }) => (
           <div key={label} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
-            <Database size={13} style={{ color, flexShrink: 0 }} />
+            <Icon size={13} style={{ color, flexShrink: 0 }} />
             <div>
               <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>{value}</div>
               <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: 2 }}>{label}</div>
@@ -158,35 +171,53 @@ export default function MemoryExplorer() {
         ))}
       </div>
 
-      {/* Search */}
-      <div style={{ position: 'relative', marginBottom: 16 }}>
-        <Search size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
+      <HaupInfoPanel />
+
+      {/* Live turns */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+        <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)' }}>
+          Conversation Turns — Neon pgvector
+          {!loading && <span style={{ color: 'var(--cyan)', marginLeft: 8, fontFamily: 'var(--font-mono)' }}>{total}</span>}
+        </div>
+      </div>
+
+      <div style={{ position: 'relative', marginBottom: 12 }}>
+        <Search size={12} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
         <input
           value={query}
           onChange={e => setQuery(e.target.value)}
-          placeholder="Semantic search through conversation history…"
-          style={{ width: '100%', paddingLeft: 32, borderRadius: 'var(--radius-sm)' }}
+          placeholder="Filter conversation turns…"
+          style={{ width: '100%', paddingLeft: 30, borderRadius: 'var(--radius-sm)' }}
         />
       </div>
 
-      {/* Info note */}
-      <div style={{ marginBottom: 14, padding: '8px 12px', background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 11.5, color: 'var(--text-secondary)' }}>
-        FAISS index persists at <code style={{ fontFamily: 'var(--font-mono)', color: 'var(--cyan)' }}>backend/faiss_index/</code>.
-        Connect <code style={{ fontFamily: 'var(--font-mono)', color: 'var(--cyan)' }}>GET /api/memory/search</code> to enable live semantic search.
-        Showing mock data — {memories.length} entries.
-      </div>
+      {error && !loading && (
+        <div style={{ padding: '10px 14px', background: 'rgba(224,82,82,0.08)', border: '1px solid rgba(224,82,82,0.25)', borderRadius: 'var(--radius)', fontSize: 12, color: '#e05252', display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
+          <AlertCircle size={13} />
+          Backend unreachable — make sure backend is running on :8000. ({error})
+        </div>
+      )}
 
-      {/* Results */}
-      {filtered.length === 0 ? (
+      {loading && (
         <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--text-muted)', fontSize: 12 }}>
-          {query ? 'No matches found' : 'Memory index is empty'}
+          Loading turns from Neon…
         </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {filtered.map(m => (
-            <MemoryCard key={m.id} item={m} onDelete={handleDelete} />
-          ))}
+      )}
+
+      {!loading && !error && turns.length === 0 && (
+        <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--text-muted)', fontSize: 12 }}>
+          No conversation turns yet. Turns appear here after calls are made.
         </div>
+      )}
+
+      {!loading && filtered.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {filtered.map((t, i) => <TurnCard key={i} item={t} />)}
+        </div>
+      )}
+
+      {!loading && query && filtered.length === 0 && turns.length > 0 && (
+        <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)', fontSize: 12 }}>No matches</div>
       )}
     </div>
   )

@@ -80,6 +80,11 @@ def load_model():
 # --------------------------------------------------
 # Run pyannote speaker diarization on audio file, return speaker segments
 # --------------------------------------------------
+@app.get("/health")
+def health():
+    return {"status": "ok", "model": "pyannote/speaker-diarization-3.1", "pipeline_loaded": pipeline is not None}
+
+
 @app.post("/diarize")
 @log_execution
 async def diarize_audio(request: AudioRequest):
