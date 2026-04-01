@@ -439,6 +439,83 @@ class AnthropicClient(BaseLLMClient):
 
 
 
+# ─── Gemini backend ───────────────────────────────────────────────────────────
+
+class GeminiClient(BaseLLMClient):
+    """
+    Uses the google-genai SDK (google.genai) for Gemini models.
+    Matches the same SDK used by the backend's GeminiResponder.
+    API key comes from GEMINI_API_KEY env var (root .env).
+    """
+
+    def __init__(self, api_key: str, model: str, timeout: int):
+        super().__init__(model)
+        try:
+            import google.genai as genai  # type: ignore
+            self._genai = genai
+            self._types = genai.types
+            self._client = genai.Client(api_key=api_key)
+            self._timeout = timeout
+        except ImportError:
+            raise ImportError(
+                "google-genai package not installed. "
+                "Run: pip install google-genai"
+            )
+
+
+    def health_check(self) -> bool:
+        try:
+            self._client.models.generate_content(
+                model=self.model,
+                contents="test",
+                config=self._types.GenerateContentConfig(max_output_tokens=1),
+            )
+            return True
+        except Exception:
+            return False
+
+
+    def _chat_raw(
+        self, messages: List[Message], max_tokens: int, temperature: float
+
+    ) -> tuple[str, int, int]:
+        # Separate system instruction from conversation messages
+        system_text = ""
+        contents = []
+        for m in messages:
+            if m.role == "system":
+                system_text = m.content
+            else:
+                # google.genai uses "user" and "model" roles
+                role = "model" if m.role == "assistant" else "user"
+                contents.append(
+                    self._types.Content(
+                        role=role,
+                        parts=[self._types.Part(text=m.content)],
+                    )
+                )
+
+        config = self._types.GenerateContentConfig(
+            system_instruction=system_text if system_text else None,
+            max_output_tokens=max_tokens,
+            temperature=temperature,
+        )
+
+        response = self._client.models.generate_content(
+            model=self.model,
+            contents=contents,
+            config=config,
+        )
+
+        content = (response.text or "").strip()
+        # Token usage from response metadata
+        usage = getattr(response, "usage_metadata", None)
+        pt = getattr(usage, "prompt_token_count", 0) if usage else 0
+        ct = getattr(usage, "candidates_token_count", len(content) // 4) if usage else 0
+        return content, pt, ct
+
+
+
 # ─── Factory ──────────────────────────────────────────────────────────────────
 
 def build_llm_client(cfg: RAGConfig) -> BaseLLMClient:
@@ -463,6 +540,12 @@ def build_llm_client(cfg: RAGConfig) -> BaseLLMClient:
             api_key=cfg.anthropic.api_key,
             model=cfg.anthropic.model,
             timeout=cfg.anthropic.timeout,
+        )
+    elif backend == "gemini":
+        return GeminiClient(
+            api_key=cfg.gemini.api_key,
+            model=cfg.gemini.model,
+            timeout=cfg.gemini.timeout,
         )
     raise ValueError(f"Unknown LLM backend: {backend!r}")
 

@@ -19,6 +19,7 @@ psutil>=5.9.0
 # RAG Engine - LLM Clients (Optional - choose based on your provider)
 openai>=1.12.0              # For OpenAI GPT models
 anthropic>=0.18.0           # For Anthropic Claude models
+google-genai>=1.0.0              # For Google Gemini models
 # Ollama uses built-in urllib, no extra package needed
 
 # Excel Support (Optional - for Excel output)

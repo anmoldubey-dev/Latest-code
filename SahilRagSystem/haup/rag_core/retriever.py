@@ -381,9 +381,10 @@ class Retriever:
                     "WHERE table_name=%s AND column_name='embedding'", (tbl,)
                 )
                 if not cur.fetchone():
-                    # Table exists but has no embedding column — do text search fallback
+                    # Table exists but has no embedding column — skip it gracefully
+                    self._log.debug("Table %s has no embedding col, skipping", tbl)
                     cur.close()
-                    return self._text_search_fallback(tbl, top_k)
+                    return []
 
                 cur.execute(
                     f"SELECT id, embedding <=> %s::vector AS distance FROM {tbl} "
@@ -404,21 +405,6 @@ class Retriever:
             self._log.error("pgvector query failed on table %s: %s", tbl, exc)
             return []
 
-    def _text_search_fallback(self, table: str, top_k: int) -> List[Tuple[str, float]]:
-        """For tables without embeddings, return all rows with 0.5 similarity score."""
-        try:
-            conn = self._pool.getconn()
-            try:
-                cur = conn.cursor(cursor_factory=RealDictCursor)
-                cur.execute(f"SELECT id FROM {table} LIMIT %s", (top_k,))
-                rows = cur.fetchall()
-                cur.close()
-                return [(str(r['id']), 0.5) for r in rows if r.get('id')]
-            finally:
-                self._pool.putconn(conn)
-        except Exception as exc:
-            self._log.warning("Text fallback failed for table %s: %s", table, exc)
-            return []
     """================= End method _search_one ================="""
 
     """================= Startup method _rrf_merge ================="""

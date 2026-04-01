@@ -58,7 +58,7 @@ export default function RagSearch() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question: query }),
-        signal: AbortSignal.timeout(300000),
+        signal: AbortSignal.timeout(600000),
       })
       if (!r2.ok) {
         const txt = await r2.text().catch(() => '')

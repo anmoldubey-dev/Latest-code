@@ -250,9 +250,13 @@ class RAGEngine:
         # Step 4: Retrieval
         retrieval: RetrievalResult = self._retriever.retrieve(expanded, session_id=sid)
 
-        # Step 5: Reranking
-        reranked_rows = self._reranker.rerank(query=effective_query, rows=retrieval.rows)
-        did_rerank    = self._reranker.is_available() and bool(retrieval.rows)
+        # Step 5: Reranking (skip for tiny result sets — cross-encoder costs ~200ms even for 1-2 rows)
+        if len(retrieval.rows) <= 2:
+            reranked_rows = retrieval.rows
+            did_rerank    = False
+        else:
+            reranked_rows = self._reranker.rerank(query=effective_query, rows=retrieval.rows)
+            did_rerank    = self._reranker.is_available() and bool(retrieval.rows)
 
         # Step 6: Context building
         context, citations = self._context_builder.build(reranked_rows)
@@ -270,7 +274,7 @@ class RAGEngine:
         # Step 8: LLM call
         try:
             answer = self._llm.chat(
-                messages, max_tokens=1024, temperature=0.2, session_id=sid,
+                messages, max_tokens=100, temperature=0.2, session_id=sid,
             )
         except Exception as exc:
             error  = str(exc)
@@ -331,7 +335,10 @@ class RAGEngine:
         log.log_query(sid, question, expanded)
 
         retrieval     = self._retriever.retrieve(expanded, session_id=sid)
-        reranked_rows = self._reranker.rerank(effective_query, retrieval.rows)
+        if len(retrieval.rows) <= 2:
+            reranked_rows = retrieval.rows
+        else:
+            reranked_rows = self._reranker.rerank(effective_query, retrieval.rows)
         context, citations = self._context_builder.build(reranked_rows)
         history  = session.to_messages(self._cfg.conversation.max_history_turns)
         messages = self._prompt_builder.build(
@@ -343,7 +350,7 @@ class RAGEngine:
 
         full_answer: List[str] = []
         for token in self._llm.chat(
-            messages, max_tokens=1024, temperature=0.2, stream=True, session_id=sid,
+            messages, max_tokens=100, temperature=0.2, stream=True, session_id=sid,
         ):
             full_answer.append(token)
             yield token

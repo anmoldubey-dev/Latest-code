@@ -44,6 +44,7 @@ __pycache__/
 *.safetensors
 *.onnx
 *.ort
+models/
 
 # HuggingFace cache
 .cache/
@@ -62,6 +63,7 @@ recordings/
 *.mp3
 *.ogg
 *.flac
+data/
 backend/static/recordings/
 services/tts_service/global_tts/outputs/
 services/tts_service/indic_tts/outputs/

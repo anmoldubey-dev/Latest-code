@@ -374,7 +374,7 @@ async def haup_create_session(request: Request):
 
 @app.post("/haup/sessions/{session_id}/ask")
 async def haup_ask(session_id: str, request: Request):
-    async with httpx.AsyncClient(timeout=120) as c:
+    async with httpx.AsyncClient(timeout=600) as c:
         r = await c.post(f"http://localhost:8088/sessions/{session_id}/ask", content=await request.body(), headers={"Content-Type": "application/json"})
     return JSONResponse(r.json(), status_code=r.status_code)
 

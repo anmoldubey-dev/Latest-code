@@ -86,7 +86,7 @@ from typing import Literal, Optional
 # ─────────────────────────────────────────────
 #  LLM Backend
 # ─────────────────────────────────────────────
-LLMBackend = Literal["ollama", "openai", "anthropic"]
+LLMBackend = Literal["ollama", "openai", "anthropic", "gemini"]
 
 
 """================= Startup class OllamaConfig ================="""
@@ -94,7 +94,7 @@ LLMBackend = Literal["ollama", "openai", "anthropic"]
 class OllamaConfig:
     base_url:   str = "http://localhost:11434"
     model:      str = "deepseek-v3.1:671b-cloud"
-    timeout:    int = 120          # seconds per request
+    timeout:    int = 600          # 10 minutes for slow potato machines
     keep_alive: str = "10m"        # how long Ollama keeps model in VRAM
 """================= End class OllamaConfig ================="""
 
@@ -116,6 +116,15 @@ class AnthropicConfig:
     model:   str = "claude-3-5-haiku-20241022"
     timeout: int = 60
 """================= End class AnthropicConfig ================="""
+
+
+"""================= Startup class GeminiConfig ================="""
+@dataclass
+class GeminiConfig:
+    api_key: str = ""              # read from GEMINI_API_KEY env var
+    model:   str = "gemini-2.0-flash"  # fast, cost-effective
+    timeout: int = 30
+"""================= End class GeminiConfig ================="""
 
 
 # ─────────────────────────────────────────────
@@ -234,7 +243,7 @@ class PgvectorConfig:
     extra_tables:       list = field(default_factory=list)  # additional tables from RAG_TABLES env
     connection_string:  str = ""           # Full DSN (overrides individual params)
     min_connections:    int = 2
-    max_connections:    int = 10
+    max_connections:    int = 8
     embedding_dimension: int = 384         # all-MiniLM-L6-v2 dimension
 """================= End class PgvectorConfig ================="""
 
@@ -253,6 +262,7 @@ class RAGConfig:
     ollama:    OllamaConfig    = field(default_factory=OllamaConfig)
     openai:    OpenAIConfig    = field(default_factory=OpenAIConfig)
     anthropic: AnthropicConfig = field(default_factory=AnthropicConfig)
+    gemini:    GeminiConfig    = field(default_factory=GeminiConfig)
 
     # Pipeline configs
     retrieval:     RetrievalConfig     = field(default_factory=RetrievalConfig)
@@ -316,6 +326,10 @@ class RAGConfig:
         # Anthropic
         cfg.anthropic.api_key = os.getenv("ANTHROPIC_API_KEY", cfg.anthropic.api_key)
         cfg.anthropic.model   = os.getenv("ANTHROPIC_MODEL",   cfg.anthropic.model)
+
+        # Gemini
+        cfg.gemini.api_key = os.getenv("GEMINI_API_KEY", cfg.gemini.api_key)
+        cfg.gemini.model   = os.getenv("GEMINI_MODEL",   cfg.gemini.model)
 
         # ── pgvector Configuration ────────────────────────────────────────────
         pgvector_dsn = os.getenv("PGVECTOR_CONNECTION_STRING", "")
