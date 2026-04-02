@@ -154,14 +154,16 @@ import httpx
 import numpy as np
 import requests as _req
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
+
+from pydantic import BaseModel
 
 from backend.core.config import (
     BACKEND_ROOT, PROJECT_ROOT,
     LANGUAGE_CONFIG, SUPPORTED_STT_LANGS, OLLAMA_ENABLED, OLLAMA_URL, TTS_LANG_FALLBACK,
-    SMART_RAG_ENABLED, RAG_TABLES,
+    HAUP_RAG_ENABLED, SMART_RAG_ENABLED, RAG_TABLES,
 )
 from backend.core.state   import _m
 from backend.core.persona import extract_agent_name, generate_greeting
@@ -261,21 +263,25 @@ async def lifespan(app: FastAPI):
     logger.info("Voice registry: %s", {k: len(v) for k, v in voice_registry.items()})
 
     # ── HAUP RAG (replaces FAISS RAG pipeline) ────────────────────────
-    logger.info("Initialising HAUP RAG client…")
-    try:
-        from backend.memory.haup_rag_client import get_haup_client
-        haup = get_haup_client()
-        haup_ok = await haup.health_check()
-        _m["haup_rag"] = haup
-        if haup_ok:
-            logger.info("HAUP RAG service reachable on :8088 — RAG enabled.")
-        else:
-            logger.warning(
-                "HAUP RAG service not reachable on :8088 — "
-                "calls will proceed without RAG context."
-            )
-    except Exception as exc:
-        logger.warning("HAUP RAG client init failed: %s", exc)
+    if HAUP_RAG_ENABLED:
+        logger.info("Initialising HAUP RAG client…")
+        try:
+            from backend.memory.haup_rag_client import get_haup_client
+            haup = get_haup_client()
+            haup_ok = await haup.health_check()
+            _m["haup_rag"] = haup
+            if haup_ok:
+                logger.info("HAUP RAG service reachable on :8088 — RAG enabled.")
+            else:
+                logger.warning(
+                    "HAUP RAG service not reachable on :8088 — "
+                    "calls will proceed without RAG context."
+                )
+        except Exception as exc:
+            logger.warning("HAUP RAG client init failed: %s", exc)
+            _m["haup_rag"] = None
+    else:
+        logger.info("HAUP RAG disabled (HAUP_RAG=false).")
         _m["haup_rag"] = None
 
     # ── Diarization client ────────────────────────────────────────────
@@ -354,6 +360,53 @@ async def stt_test_page():
 @log_execution
 async def api_voices():
     return _m.get("voice_registry", {})
+
+
+_PERSONA_SYSTEM = (
+    "You are a prompt engineer for Parler TTS. "
+    "Translate the user's input to English. "
+    "Extract the emotional style and the speaking speed. "
+    "Return ONLY a JSON object with keys 'style' and 'speed_desc'. "
+    "No speaker names, no extra text. "
+    "Example: {\"style\": \"warm and cheerful\", \"speed_desc\": \"at a moderate pace\"}"
+)
+_PERSONA_SYSTEM_INDIC = (
+    "You are a prompt engineer for Indic Parler TTS (English-conditioned). "
+    "Translate the user's input to plain English. "
+    "Extract a short emotional style phrase (under 8 words) and a speed phrase (under 5 words). "
+    "Return ONLY a JSON object with keys 'style' and 'speed_desc'. No speaker names. "
+    "Example: {\"style\": \"gentle and expressive\", \"speed_desc\": \"slowly\"}"
+)
+
+
+class _SummarizePersonaReq(BaseModel):
+    raw_prompt: str
+    tts_type: str = "global"
+
+
+@app.post("/api/avatar/summarize-persona")
+async def summarize_persona(req: _SummarizePersonaReq):
+    system = _PERSONA_SYSTEM_INDIC if req.tts_type == "indic" else _PERSONA_SYSTEM
+    payload = {"model": os.getenv("OLLAMA_MODEL", "qwen2.5:7b"),
+               "system": system, "prompt": req.raw_prompt, "stream": False}
+    try:
+        async with httpx.AsyncClient(timeout=600.0) as client:
+            base_url = OLLAMA_URL.replace("/api/chat", "")
+            resp = await client.post(f"{base_url}/api/generate", json=payload)
+        resp.raise_for_status()
+        raw = resp.json().get("response", "")
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="Ollama timed out.")
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Ollama error: {exc}")
+    try:
+        start = raw.index("{"); end = raw.rindex("}") + 1
+        data = json.loads(raw[start:end])
+        style      = str(data.get("style", "clear and professional"))
+        speed_desc = str(data.get("speed_desc", "at a moderate pace"))
+    except Exception:
+        style, speed_desc = "clear and professional", "at a moderate pace"
+    return {"style": style, "speed_desc": speed_desc}
 
 
 @app.get("/api/sessions")
@@ -574,10 +627,7 @@ async def ws_call(ws: WebSocket):
             logger.debug("[PGMem] get_customer_context failed: %s", exc)
     _m["customer_context"] = customer_ctx
 
-    # ── HAUP RAG — create per-call session ───────────────────────────
-    rag_session_id = ""
-    if _m.get("haup_rag"):
-        rag_session_id = await _m["haup_rag"].start_session(session_id)
+    rag_session_id = ""  # HAUP RAG is admin-console search only — no per-call sessions
 
     _greetings    = load_greetings()
     _raw_greeting = _greetings.get(lang) or generate_greeting(lang, agent_name)
@@ -645,21 +695,25 @@ async def ws_call(ws: WebSocket):
 
     async def process_turn(pcm: np.ndarray) -> None:
         nonlocal interrupted, current_turn_task
-        logger.info("🎤 VAD fired — pcm=%.2fs  starting STT", len(pcm) / 16_000)
 
         async with lock:
+            # ── STT ──────────────────────────────────────────────────
+            logger.info("┌─ TURN START  pcm=%.2fs", len(pcm) / 16_000)
             try:
                 user_text = await loop.run_in_executor(None, stt_sync, pcm, lang)
             except Exception:
-                logger.exception("STT error")
+                logger.exception("  STT error")
                 return
             if not user_text:
+                logger.info("└─ TURN END   (empty STT)")
                 return
 
             user_text = _collapse_repetitions(user_text)
             if _is_hallucination(user_text):
-                logger.warning("Hallucination dropped")
+                logger.warning("  STT hallucination dropped")
                 return
+
+            logger.info("  STT  → %r", user_text)
 
             try:
                 await ws.send_json({"type": "transcript", "text": user_text})
@@ -669,12 +723,8 @@ async def ws_call(ws: WebSocket):
             history.append({"role": "user", "text": user_text})
             hist_snap = list(history)
 
-            # ── HAUP RAG context (session-based) ─────────────────────
+            # ── Smart RAG ────────────────────────────────────────────
             rag_context = ""
-            if _m.get("haup_rag") and rag_session_id:
-                rag_context = await _m["haup_rag"].get_context(rag_session_id, user_text)
-
-            # ── Smart RAG (direct pgvector, runs if SMART_RAG=true) ───
             if SMART_RAG_ENABLED and RAG_TABLES:
                 try:
                     from backend.memory.smart_rag import search as _smart_rag_search
@@ -682,22 +732,22 @@ async def ws_call(ws: WebSocket):
                         None, _smart_rag_search, user_text, RAG_TABLES
                     )
                     if smart_ctx:
-                        rag_context = (rag_context + "\n\n" + smart_ctx).strip() if rag_context else smart_ctx
-                        logger.info("[SmartRAG] context injected (%d chars)", len(smart_ctx))
+                        rag_context = smart_ctx
+                        logger.info("  RAG  → %d chars | preview: %s", len(smart_ctx), smart_ctx[:120].replace("\n", " "))
+                    else:
+                        logger.info("  RAG  → no match (threshold not met)")
                 except Exception as exc:
-                    logger.warning("[SmartRAG] failed: %s", exc)
+                    logger.warning("  RAG  → failed: %s", exc)
 
-            # Inject RAG context + customer history into state for LLM functions
-            _m["rag_context"]      = rag_context
-            _m["customer_context"] = customer_ctx
-
+            # ── LLM ──────────────────────────────────────────────────
+            logger.info("  LLM  → calling %s", llm_key)
             llm_fn  = _gemini_sync if llm_key == "gemini" else _qwen_sync
-            llm_fut = loop.run_in_executor(None, llm_fn, hist_snap, lang, voice_stem)
+            llm_fut = loop.run_in_executor(None, llm_fn, hist_snap, lang, voice_stem, rag_context, customer_ctx)
 
             try:
                 ai_text = await llm_fut
             except Exception:
-                logger.exception("LLM error")
+                logger.exception("  LLM error")
                 canned = LANGUAGE_CONFIG.get(lang, {}).get(
                     "canned_error",
                     "Sorry, I had a connection issue. Could you repeat that?",
@@ -710,6 +760,8 @@ async def ws_call(ws: WebSocket):
 
             if not ai_text:
                 return
+
+            logger.info("  LLM  ← %r", ai_text[:120])
 
             await asyncio.sleep(random.uniform(0.2, 0.5))
 
@@ -741,13 +793,15 @@ async def ws_call(ws: WebSocket):
             try:
                 wav = await tts(tts_text, lang, voice_stem)
                 a64 = base64.b64encode(wav).decode()
+                logger.info("  TTS  → %.1fkB audio", len(wav) / 1024)
             except Exception:
-                logger.exception("TTS error")
+                logger.warning("  TTS  → failed (no audio)")
                 a64 = ""
             try:
                 await ws.send_json({"type": "response", "text": ai_text, "audio": a64})
+                logger.info("└─ TURN END")
             except Exception:
-                logger.debug("WS send failed — client disconnected?")
+                logger.debug("  WS send failed — client disconnected")
 
             if _m.get("pg_memory"):
                 async def _persist():
@@ -774,7 +828,7 @@ async def ws_call(ws: WebSocket):
                 call_audio_chunks.append(chunk)
 
                 if rms > 0.015:
-                    logger.info("[RX] VAD triggered  RMS=%.6f", rms)
+                    logger.debug("[RX] VAD  RMS=%.3f", rms)
                     pcm_buf.append(chunk)
                     last_speech_time = loop.time()
                 elif last_speech_time is not None:
@@ -782,7 +836,7 @@ async def ws_call(ws: WebSocket):
                     pcm_buf.append(chunk)
                     now = loop.time()
                     if not lock.locked() and (now - last_speech_time) >= SILENCE_GAP:
-                        logger.info("[RX] STT start  buf=%.2fs", len(pcm_buf) * 1600 / 16_000)
+                        logger.debug("[RX] STT start  buf=%.2fs", len(pcm_buf) * 1600 / 16_000)
                         pcm = np.concatenate(pcm_buf)
                         pcm_buf.clear()
                         last_speech_time = None
@@ -818,9 +872,6 @@ async def ws_call(ws: WebSocket):
     finally:
         logger.info("📵 Call ended | session=%s lang=%s llm=%s", session_id[:8], lang, llm_key)
 
-        # ── HAUP RAG — clean up per-call session ─────────────────────
-        if _m.get("haup_rag") and rag_session_id:
-            asyncio.create_task(_m["haup_rag"].end_session(rag_session_id))
 
         # ── Post-call background tasks (WAV save + diarization + LTM) ─
         asyncio.create_task(

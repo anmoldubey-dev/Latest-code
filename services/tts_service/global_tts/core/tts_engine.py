@@ -209,6 +209,8 @@ class TTSEngine:
         emotion: str,
         language: str = "",
         max_length: int = 300,
+        custom_style: str = None,
+        custom_speed: str = None,
     ) -> np.ndarray:
         text = _clean_text(text)
         if not text:
@@ -219,6 +221,8 @@ class TTSEngine:
         input_ids, attention_mask, description = self.persona.get_or_encode(
             voice_name, emotion, language,
             self.description_tokenizer, self.device,
+            custom_style=custom_style,
+            custom_speed=custom_speed,
         )
         logger.info("Description: %s", description)
 

@@ -31,10 +31,12 @@ OLLAMA_URL     = "http://localhost:11434/api/chat"
 # Controlled by OLLAMA env var (set by start_all.bat from services.config)
 OLLAMA_ENABLED = os.environ.get("OLLAMA", "false").strip().lower() == "true"
 
+# HAUP RAG — session-based pgvector RAG via :8088 service
+HAUP_RAG_ENABLED  = os.environ.get("HAUP_RAG", "false").strip().lower() == "true"
+
 # Smart RAG — injected directly into LLM prompt before every response
 SMART_RAG_ENABLED = os.environ.get("SMART_RAG", "false").strip().lower() == "true"
-# Tables to search — comma-separated, from services.config via start_all.bat
-RAG_TABLES = [t.strip() for t in os.environ.get("RAG_TABLES", "users,conversation_turns").split(",") if t.strip()]
+RAG_TABLES = [t.strip() for t in os.environ.get("SMART_RAG_TABLES", "vector_store").split(",") if t.strip()]
 
 LANGUAGE_CONFIG: Dict[str, dict] = {
     "en": {

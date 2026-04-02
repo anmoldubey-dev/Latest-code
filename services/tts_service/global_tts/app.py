@@ -58,11 +58,14 @@
 # ================================================================
 
 import asyncio
+import json
 import os
 import sys
 import time
 from pathlib import Path
+from typing import Optional
 
+import httpx
 import numpy as np
 import soundfile as sf
 from dotenv import load_dotenv
@@ -91,6 +94,8 @@ OUTPUT_DIR = Path(os.getenv("OUTPUT_DIR", "outputs/recordings"))
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 SAMPLE_RATE = 24000
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
 
 from core.tts_engine import TTSEngine
 from core.voice_sculptor import HumanVoiceSculptor
@@ -164,6 +169,14 @@ class GenerateRequest(BaseModel):
     emotion: str = "neutral"
     voice_name: str = "Emma (Warm Female)"
     language: str = "English"
+    # Optional identity-safe behavior overrides (from Ollama summarize endpoint)
+    custom_style: Optional[str] = None
+    custom_speed: Optional[str] = None
+
+
+class SummarizePersonaRequest(BaseModel):
+    raw_prompt: str                 # user's free-form text (any language)
+    tts_type: str = "global"        # "global" or "indic"
 
 
 class GenerateResponse(BaseModel):
@@ -248,6 +261,8 @@ async def generate(req: GenerateRequest):
                 emotion=req.emotion,
                 language=req.language,
                 max_length=MAX_TEXT_LENGTH,
+                custom_style=req.custom_style or None,
+                custom_speed=req.custom_speed or None,
             ),
         )
         logger.info("TTS done  | raw audio %.2fs", len(raw_audio) / getattr(engine, "sample_rate", SAMPLE_RATE))
@@ -325,6 +340,64 @@ async def serve_audio(filename: str):
     if not path.exists():
         raise HTTPException(status_code=404, detail="File not found")
     return FileResponse(str(path), media_type="audio/wav")
+
+
+_OLLAMA_SYSTEM = (
+    "You are a prompt engineer for Parler TTS. "
+    "Translate the user's input to English. "
+    "Extract the emotional style and the speaking speed. "
+    "Return ONLY a JSON object with keys 'style' and 'speed_desc'. "
+    "DO NOT include any speaker names or extra text. "
+    "Examples: {\"style\": \"warm and cheerful\", \"speed_desc\": \"at a moderate pace\"}"
+)
+
+_OLLAMA_SYSTEM_INDIC = (
+    "You are a prompt engineer for Indic Parler TTS (English-conditioned). "
+    "Translate the user's input to plain English. "
+    "Extract a short emotional style phrase and a speaking speed phrase. "
+    "Return ONLY a JSON object with keys 'style' and 'speed_desc'. "
+    "Keep phrases under 8 words each. No speaker names. "
+    "Examples: {\"style\": \"gentle and expressive\", \"speed_desc\": \"slowly\"}"
+)
+
+
+@app.post("/api/avatar/summarize-persona")
+@log_execution
+async def summarize_persona(req: SummarizePersonaRequest):
+    """
+    Send user's free-form behavior description to local Ollama.
+    Returns style + speed_desc safe to inject into Parler TTS prompt.
+    Voice identity (speaker name + pitch) is NOT touched here.
+    """
+    system_prompt = _OLLAMA_SYSTEM_INDIC if req.tts_type == "indic" else _OLLAMA_SYSTEM
+    payload = {
+        "model": OLLAMA_MODEL,
+        "system": system_prompt,
+        "prompt": req.raw_prompt,
+        "stream": False,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=600.0) as client:
+            resp = await client.post(f"{OLLAMA_URL}/api/generate", json=payload)
+        resp.raise_for_status()
+        raw = resp.json().get("response", "")
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="Ollama timed out. Try a lighter model or shorter prompt.")
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Ollama error: {exc}")
+
+    # Extract JSON from the response (model may wrap it in markdown)
+    try:
+        start = raw.index("{")
+        end   = raw.rindex("}") + 1
+        data  = json.loads(raw[start:end])
+        style      = str(data.get("style", "clear and professional"))
+        speed_desc = str(data.get("speed_desc", "at a moderate pace"))
+    except (ValueError, KeyError, json.JSONDecodeError):
+        logger.warning("Ollama returned non-JSON: %r — using fallback", raw)
+        style, speed_desc = "clear and professional", "at a moderate pace"
+
+    return {"style": style, "speed_desc": speed_desc, "raw_ollama": raw}
 
 
 app.mount("/", StaticFiles(directory="static", html=True), name="static")

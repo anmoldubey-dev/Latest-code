@@ -9,7 +9,7 @@ const SERVICES = {
   diarization:  '/api/diarization',
   translator:   '/api/translator',
   voiceCloner:  '/api/voice-cloner',
-  haupRag:      'http://localhost:8080',
+  haupRag:      '/api/haup-rag',
 }
 
 async function request(base, path, options = {}) {
@@ -38,10 +38,13 @@ async function request(base, path, options = {}) {
 
 // ── Backend :8000 ───────────────────────────────────────────────
 export const backendApi = {
-  voices:        () => request(SERVICES.backend, '/api/voices'),
-  livenessHealth: () => request(SERVICES.backend, '/livekit/health'),
-  listAssets:    () => request(SERVICES.backend, '/list-assets'),
-  health:        () => request(SERVICES.backend, '/livekit/health', { timeout: 8000 }),
+  voices:           () => request(SERVICES.backend, '/api/voices'),
+  livenessHealth:   () => request(SERVICES.backend, '/livekit/health'),
+  listAssets:       () => request(SERVICES.backend, '/list-assets'),
+  health:           () => request(SERVICES.backend, '/livekit/health', { timeout: 8000 }),
+  summarizePersona: (body) => request(SERVICES.backend, '/api/avatar/summarize-persona', {
+    method: 'POST', body: JSON.stringify(body), timeout: 600000,
+  }),
 }
 
 // ── TTS Global :8003 ────────────────────────────────────────────
@@ -54,7 +57,7 @@ export const ttsGlobalApi = {
   generate:   (body) => request(SERVICES.ttsGlobal, '/generate', {
     method: 'POST',
     body: JSON.stringify(body),
-    timeout: 30000,
+    timeout: 300000,
   }),
   audioUrl:   (filename) => `${SERVICES.ttsGlobal}/audio/${filename}`,
 }
@@ -69,7 +72,7 @@ export const ttsIndicApi = {
   generate:   (body) => request(SERVICES.ttsIndic, '/generate', {
     method: 'POST',
     body: JSON.stringify(body),
-    timeout: 30000,
+    timeout: 300000,
   }),
   audioUrl:   (filename) => `${SERVICES.ttsIndic}/audio/${filename}`,
 }

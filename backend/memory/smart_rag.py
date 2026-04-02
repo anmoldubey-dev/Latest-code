@@ -155,12 +155,7 @@ def search(query: str, tables: List[str]) -> str:
     """
     if not query or not tables:
         return ""
-    # Expand: if user asked for 'users' or 'agents', also search vector_store
-    # (user/agent data was ingested there as embeddings)
-    expanded_tables = list(tables)
-    if any(t in _BACKED_BY_VECTOR_STORE for t in tables) and "vector_store" not in expanded_tables:
-        expanded_tables.append("vector_store")
-    tables = expanded_tables
+    tables = list(tables)
     try:
         from backend.memory.pg_memory import _get_embedder
         embedder = _get_embedder()
@@ -222,6 +217,10 @@ def search(query: str, tables: List[str]) -> str:
     if not results:
         return ""
 
-    context = "Relevant data from knowledge base:\n" + "\n".join(results[:_TOP_K * len(tables)])
-    logger.info("[SmartRAG] found %d results across tables: %s", len(results), tables)
+    top = results[:_TOP_K * len(tables)]
+    context = "Relevant data from knowledge base:\n" + "\n".join(top)
+    scores = [r.split("]")[0].split("|")[-1].strip() for r in top]
+    logger.info("[SmartRAG] %d results | scores=%s", len(top), scores)
+    for i, r in enumerate(top, 1):
+        logger.info("  [%d] %s", i, r[:100])
     return context

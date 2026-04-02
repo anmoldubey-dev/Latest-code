@@ -68,18 +68,31 @@ class PersonaManager:
         self._cache: dict[str, tuple] = {}
         self._active_key: Optional[str] = None
 
-    def build_description(self, voice_name: str, emotion: str, language: str) -> str:
+    def build_description(
+        self,
+        voice_name: str,
+        emotion: str,
+        language: str,
+        custom_style: Optional[str] = None,
+        custom_speed: Optional[str] = None,
+    ) -> str:
         voice      = VOICES.get(voice_name, {})
+        # IDENTITY LOCK: speaker + pitch_desc are ALWAYS pulled from VOICES
         speaker    = voice.get("parler_speaker", "Laura")
         pitch_desc = voice.get("pitch_desc", "slightly high-pitched")
-        preset     = PRESETS.get(emotion, PRESETS["neutral"])
-        speed_desc = preset["speed_desc"]
-        style      = preset["style"]
-        lang_note  = language if language else "English"
 
-        # Matches the parler-tts-mini-v1.1 training prompt format.
-        # Named speaker anchors voice identity across every generation.
-        # Speed and style come from the emotion preset — no contradictions.
+        if custom_style or custom_speed:
+            # Dynamic behavior injection — identity stays locked
+            preset = PRESETS.get(emotion, PRESETS["neutral"])
+            style      = custom_style or preset["style"]
+            speed_desc = custom_speed or preset["speed_desc"]
+        else:
+            preset     = PRESETS.get(emotion, PRESETS["neutral"])
+            speed_desc = preset["speed_desc"]
+            style      = preset["style"]
+
+        lang_note = language if language else "English"
+
         return (
             f"{speaker}'s voice is {pitch_desc} and {style}, "
             f"speaking {lang_note} {speed_desc}. "
@@ -94,11 +107,13 @@ class PersonaManager:
         language: str,
         tokenizer,
         device: str,
+        custom_style: Optional[str] = None,
+        custom_speed: Optional[str] = None,
     ) -> tuple:
-        key = f"{voice_name}||{emotion}||{language}"
+        key = f"{voice_name}||{emotion}||{language}||{custom_style or ''}||{custom_speed or ''}"
 
         if key not in self._cache:
-            description = self.build_description(voice_name, emotion, language)
+            description = self.build_description(voice_name, emotion, language, custom_style, custom_speed)
             encoded = tokenizer(description, return_tensors="pt").to(device)
             self._cache[key] = (
                 encoded.input_ids,

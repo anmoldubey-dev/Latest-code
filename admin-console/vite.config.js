@@ -36,6 +36,11 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: path => path.replace(/^\/api\/voice-cloner/, ''),
       },
+      '/api/haup-rag': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+        rewrite: path => path.replace(/^\/api\/haup-rag/, ''),
+      },
     },
   },
 })
