@@ -493,7 +493,7 @@ function EditModal({ persona, onSave, onClose }) {
             Behavior and Greeting generated via AI!
           </div>
         )}
-        {(contextText.trim() || fileContent.trim()) && (
+        {(companyName.trim() || contextText.trim() || fileContent.trim()) && (
           <button disabled={ollamaStatus === "loading"}
             onClick={async () => {
               setOllamaStatus("loading"); setOllamaError("");

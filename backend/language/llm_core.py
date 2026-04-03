@@ -28,7 +28,7 @@
 #     v
 # +-----------------------------+
 # | _build_qwen_system()        |
-# | * compose Qwen prompt       |
+# | * compose Ollama system prompt, append lang+length+script rules |
 # +-----------------------------+
 #     |
 #     |----> extract_agent_name()
@@ -132,14 +132,20 @@ def _build_qwen_system(lang: str, voice_name: str, rag_context: str = "", custom
     language_rule = LANGUAGE_CONFIG.get(lang, {}).get(
         "llm_rule", "Reply in the same language the user is speaking."
     )
+    rules = (
+        f"{language_rule} "
+        "Reply in exactly 2-3 COMPLETE sentences. Always end with a period. Never cut off. "
+        "Never say you are AI. Be natural. "
+        "Write replies in the native script of the reply language. "
+        "English technical terms (website, app, error, password, etc.) may stay in English. "
+        "But never reply in a completely different language."
+    )
     if custom_prompt_text:
-        base = custom_prompt_text
+        base = f"{custom_prompt_text}\n\n{rules}"
     else:
         base = (
-            f"You are {agent_name}, a human call center agent at SR Comsoft. "
-            f"{language_rule} "
-            "Reply in 1-2 short sentences. Never say you are AI. Be natural. "
-            "Strictly brief responses only."
+            f"You are {agent_name} from SR Comsoft. "
+            f"{rules}"
         )
     parts = [base]
 
@@ -167,6 +173,7 @@ def _qwen_sync(history: List[dict], lang: str, voice_name: str, rag_context: str
     try:
         r = _req.post(
             OLLAMA_URL,
+            timeout=300,
             json={
                 "model":      "qwen2.5:7b",
                 "messages":   messages,
@@ -174,11 +181,10 @@ def _qwen_sync(history: List[dict], lang: str, voice_name: str, rag_context: str
                 "keep_alive": -1,
                 "options": {
                     "temperature": 0.7,
-                    "num_predict": 400,
+                    "num_predict": 180,
                     "num_ctx":     2048,
                 },
             },
-            timeout=90,
         )
         r.raise_for_status()
         return r.json()["message"]["content"].strip()

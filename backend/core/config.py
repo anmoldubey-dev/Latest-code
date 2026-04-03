@@ -30,7 +30,7 @@ PROJECT_ROOT = BACKEND_ROOT.parent
 OLLAMA_URL     = "http://localhost:11434/api/chat"
 # Controlled by OLLAMA env var (set by start_all.bat from services.config)
 OLLAMA_ENABLED = os.environ.get("OLLAMA", "false").strip().lower() == "true"
-AVATAR_SUMMARY_AI = os.environ.get("AVATAR_SUMMARY_AI", "olama").strip().lower()
+AVATAR_SUMMARY_AI = os.environ.get("AVATAR_SUMMARY_AI", "ollama").strip().lower()
 
 # HAUP RAG — session-based pgvector RAG via :8088 service
 HAUP_RAG_ENABLED  = os.environ.get("HAUP_RAG", "false").strip().lower() == "true"

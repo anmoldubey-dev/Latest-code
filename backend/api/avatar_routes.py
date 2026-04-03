@@ -110,26 +110,39 @@ async def configure_avatar(req: _ConfigureAvatarReq):
     logger.info("  [Avatar Config] Generating persona for '%s' (%s) via %s...",
                 req.agent_name, req.voice_stem, AVATAR_SUMMARY_AI.upper())
 
-    system = f"""You are an Avatar Behavior Engineer.
-Analyze context and output a JSON object containing:
-- "role": Short 2-5 word descriptor.
-- "prompt": Short instruction for LLM. No greetings. Be concise.
-- "greeting": Single-sentence greeting at start of call.
-- "style": Emotion style (e.g. "warm") in English.
-- "speed_desc": Speed descriptor (e.g. "moderate") in English.
+    # Extract custom greeting if provided (sent as "REQUIRED GREETING: ..." suffix)
+    custom_greeting = ""
+    clean_context = req.context_text
+    if "\n\nREQUIRED GREETING:" in req.context_text:
+        parts = req.context_text.split("\n\nREQUIRED GREETING:", 1)
+        clean_context = parts[0].strip()
+        custom_greeting = parts[1].strip()
 
-Rules for "greeting":
-- Gender: {req.gender.lower()}.
-- Include company ("{req.company_name}") and agent ("{req.agent_name}").
-- CRITICAL: The avatar's target language code is "{req.language}".
-- You MUST write the greeting in the native language and script of "{req.language}". If English words must be used, transliterate them into the native script (e.g. Devanagari for Hindi). NEVER output an English greeting if the target code is not 'en'.
+    greeting_field = (
+        f'"{custom_greeting}"'
+        if custom_greeting else
+        f'"<Write a natural call-center opening greeting in {req.language} language. Transliterate the agent name \'{req.agent_name}\' and company name \'{req.company_name}\' into the native script of {req.language}. Pattern: [Greeting word], [I am {req.agent_name} transliterated] [company transliterated] [from/se]. [How can I help you in {req.language}?]>"'
+    )
 
-Context:
-{req.context_text[:1500]}
+    system = f"""You are a voice AI persona engineer. Output ONLY valid JSON, no extra text.
 
-Output JSON only."""
+Agent: {req.agent_name} | Company: {req.company_name} | Language: {req.language} | Gender: {req.gender}
+Context: {clean_context[:800]}
 
-    prompt_text = "Analyze the context and generate the JSON configuration."
+Return this exact JSON:
+{{
+  "role": "<2-4 word English job title>",
+  "prompt": "You are {req.agent_name} from {req.company_name}. <ENGLISH ONLY: 2 sentences about what this agent does based on context. No greetings. No other language.>",
+  "greeting": {greeting_field},
+  "style": "<one English word: helpful/warm/professional/confident>",
+  "speed_desc": "at a moderate pace"
+}}
+
+RULES:
+- "role", "prompt", "style", "speed_desc" must be in ENGLISH only.
+- "greeting" must be in {req.language} native script. Transliterate company "{req.company_name}" and agent "{req.agent_name}" into native script characters."""
+
+    prompt_text = "Output the JSON now."
     if AVATAR_SUMMARY_AI == "gemini":
         logger.info("  [Avatar Config] Sending request to Gemini...")
         try:
