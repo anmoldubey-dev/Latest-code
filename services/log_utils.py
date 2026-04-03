@@ -11,19 +11,19 @@
 # +---------------------------+
 #     |
 #     |----> <StreamHandler> -> __init__()
-#     |        * colorized console output
+#     |        * console output
 #     |
 #     |----> <RotatingFileHandler> -> __init__()
-#     |        * JSON log file rotation
+#     |        * JSON log rotation
 #     |
 #     v
 # +---------------------------+
 # | log_execution()           |
-# | * wrap sync or async func |
+# | * function decorator      |
 # +---------------------------+
 #     |
 #     |----> _set_trace()
-#     |        * inject UUID trace ID
+#     |        * inject trace ID
 #     |
 #     |----> wrapper()
 #     |        * call decorated function

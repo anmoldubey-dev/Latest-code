@@ -7,24 +7,23 @@
 #     v
 # +--------------------------------+
 # | load_greetings()               |
-# | * load greetings 3-level fall  |
+# | * resolve start greetings      |
 # +--------------------------------+
 #     |
-#     |----> <Path> -> exists()
-#     |        * check for greetings.xlsx
+#     |----> exists()
+#     |        * check excel existence
 #     |
 #     |----> read_excel()
-#     |        * parse xlsx sheet by lang key
-#     |      OR
-#     |----> <Path> -> glob()
-#     |        * find all *.txt greeting files
+#     |        * parse excel data
 #     |
-#     |----> <Path> -> read_text()
-#     |        * read each language text file
+#     |----> glob()
+#     |        * scan text files
+#     |
+#     |----> read_text()
+#     |        * read file content
 #     |
 #     v
-# [ RETURN dict ]
-#
+# [ END ]
 # ================================================================
 
 import logging

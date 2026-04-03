@@ -11,23 +11,22 @@
 // +---------------------------+
 //     |
 //     |----> useEffect()
-//     |        * fetches language list on mount
+//     |        * fetch languages on mount
 //     |
-//     |----> useCallback() -> swap()
-//     |        * swaps src/tgt langs + text
+//     |----> swap()
+//     |        * swap source and target
 //     |
-//     |----> useCallback() -> translate()
-//     |        * posts to translatorApi.translate()
+//     |----> translate()
+//     |        * call translation API
 //     |
 //     |----> copy()
-//     |        * copies output to clipboard
+//     |        * copy output to clip
 //     |
 //     |----> handleKey()
-//     |        * triggers translate on Ctrl+Enter
+//     |        * trigger on Ctrl+Enter
 //     |
 //     v
 // [ END ]
-//
 // ================================================================
 
 import React, { useState, useEffect, useCallback } from 'react'

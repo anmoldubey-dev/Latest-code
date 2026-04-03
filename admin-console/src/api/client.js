@@ -1,4 +1,36 @@
 // ================================================================
+// FILE EXECUTION FLOW
+// ================================================================
+//
+// [ START ]
+//     |
+//     v
+// +---------------------------+
+// | request()                 |
+// | * atomic fetch wrapper    |
+// +---------------------------+
+//     |
+//     |----> fetch()
+//     |        * execute network request
+//     |
+//     v
+// +---------------------------+
+// | checkAllHealth()          |
+// | * system-wide health poll |
+// +---------------------------+
+//     |
+//     |----> backendApi.health()
+//     |        * check core backend
+//     |
+//     |----> ttsGlobalApi.health()
+//     |        * check global tts
+//     |
+//     |----> translatorApi.health()
+//     |        * check translation
+//     |
+//     v
+// [ END ]
+// ================================================================
 // API Client — Base fetch helpers with timeout + error handling
 // ================================================================
 
@@ -43,7 +75,10 @@ export const backendApi = {
   listAssets:       () => request(SERVICES.backend, '/list-assets'),
   health:           () => request(SERVICES.backend, '/livekit/health', { timeout: 8000 }),
   summarizePersona: (body) => request(SERVICES.backend, '/api/avatar/summarize-persona', {
-    method: 'POST', body: JSON.stringify(body), timeout: 600000,
+    method: 'POST', body: JSON.stringify(body), timeout: 1200000,
+  }),
+  configureAvatar: (body) => request(SERVICES.backend, '/api/avatar/configure', {
+    method: 'POST', body: JSON.stringify(body), timeout: 1200000,
   }),
 }
 

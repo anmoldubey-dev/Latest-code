@@ -1,60 +1,59 @@
 # ================================================================
 # FILE EXECUTION FLOW
 # ================================================================
-#    (uvicorn app:app --host 0.0.0.0 --port 8003 --reload)
+#
 # [ START ]
-#    |
-#    v
+#     |
+#     v
 # +-------------------------------+
 # | startup_event()               |
-# | * load Parler TTS at boot     |
+# | * load Parler TTS             |
 # +-------------------------------+
-#    |
-#    |----> <TTSEngine> -> load()
-#    |        * download and init Parler model
-#    |
-#    v
+#     |
+#     |----> <TTSEngine> -> load()
+#     |        * init Parler model
+#     |
+#     v
 # +-------------------------------+
 # | generate()                    |
-# | * POST /generate TTS request  |
+# | * POST TTS request            |
 # +-------------------------------+
-#    |
-#    |----> <PersonaManager> -> guard()
-#    |        * enforce language voice guardrail
-#    |
-#    |----> <TTSEngine> -> generate()
-#    |        * Parler TTS inference to audio
-#    |
-#    |----> <HumanVoiceSculptor> -> process()
-#    |        * EQ room ambience loudness DSP
-#    |
-#    |----> _next_filename()
-#    |        * resolve next rec-N WAV name
-#    |
-#    v
+#     |
+#     |----> <PersonaManager> -> guard()
+#     |        * apply voice guardrail
+#     |
+#     |----> <TTSEngine> -> generate()
+#     |        * Parler TTS inference
+#     |
+#     |----> <HumanVoiceSculptor> -> process()
+#     |        * audio loudness DSP
+#     |
+#     |----> _next_filename()
+#     |        * resolve rec name
+#     |
+#     v
 # +-------------------------------+
 # | list_voices()                 |
-# | * GET /voices voice keys      |
+# | * GET voice list              |
 # +-------------------------------+
-#    |
-#    v
+#     |
+#     v
 # +-------------------------------+
 # | list_languages()              |
-# | * GET /languages language map |
+# | * GET supported languages     |
 # +-------------------------------+
-#    |
-#    v
+#     |
+#     v
 # +-------------------------------+
 # | list_recordings()             |
-# | * GET /recordings file list   |
+# | * GET file metadata           |
 # +-------------------------------+
-#    |
-#    |----> _get_recordings_meta()
-#    |        * build file stats list
-#    |
-#    v
+#     |
+#     |----> _get_recordings_meta()
+#     |        * build file stats
+#     |
+#     v
 # [ END ]
-#
 # ================================================================
 
 import asyncio

@@ -14,18 +14,18 @@
 #     |        * colorized console output
 #     |
 #     |----> <RotatingFileHandler> -> __init__()
-#     |        * JSON log file rotation
+#     |        * JSON log rotation
 #     |
 #     v
 # +---------------------------+
 # | get_trace_id()            |
-# | * read trace ID from ctx  |
+# | * read trace ID           |
 # +---------------------------+
 #     |
 #     v
 # +---------------------------+
 # | set_trace_id()            |
-# | * write trace ID to ctx   |
+# | * write trace ID          |
 # +---------------------------+
 #     |
 #     v

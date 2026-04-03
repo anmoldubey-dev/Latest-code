@@ -17,11 +17,10 @@
 // +---------------------------+
 //     |
 //     |----> Check()
-//     |        * renders per-cell support icon
+//     |        * render support icon
 //     |
 //     v
 // [ END ]
-//
 // ================================================================
 
 import React, { useState } from 'react'

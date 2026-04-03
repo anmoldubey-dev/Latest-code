@@ -7,23 +7,23 @@
 #     v
 # +------------------------------------------+
 # | _collapse_repetitions()                  |
-# | * collapse n-gram loops to one unit      |
+# | * collapse repeating phrases             |
 # +------------------------------------------+
 #     |
 #     |----> _is_repeating()
-#     |        * detect repeating n-gram units
+#     |        * detect n-gram units
 #     |
 #     v
 # +------------------------------------------+
 # | _is_hallucination()                      |
-# | * detect and reject bad STT output       |
+# | * detect bad STT output                  |
 # +------------------------------------------+
 #     |
 #     |----> _collapse_repetitions()
-#     |        * clean loops before guarding
+#     |        * clean loops before check
 #     |
 #     v
-# [ RETURN bool ]
+# [ END ]
 #
 # ================================================================
 

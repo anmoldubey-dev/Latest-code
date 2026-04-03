@@ -7,37 +7,37 @@
 #     v
 # +-----------------------------+
 # | __init__()                  |
-# | * alloc ring buffer         |
+# | * allocate ring buffer      |
 # +-----------------------------+
 #     |
 #     v
 # +-----------------------------+
 # | push()                      |
-# | * calibrate adaptive VAD    |
+# | * apply adaptive VAD        |
 # +-----------------------------+
 #     |
 #     |----> _calibrate()
-#     |        * measure ambient noise floor
+#     |        * track noise floor
 #     |
 #     |----> _is_voice()
-#     |        * spectral ratio and ZCR check
+#     |        * spectral voice check
 #     |
 #     |----> _idle_push()
-#     |        * write PCM to ring
+#     |        * append PCM data
 #     |
 #     |----> _drain_idle_into_chunks()
-#     |        * snapshot ring on voice start
+#     |        * snapshot voice segment
 #     |
 #     v
 # +-----------------------------+
 # | ready()                     |
-# | * detect utterance complete |
+# | * check silence gap         |
 # +-----------------------------+
 #     |
 #     v
 # +-----------------------------+
 # | flush()                     |
-# | * concat and reset state    |
+# | * reset and return PCM      |
 # +-----------------------------+
 #     |
 #     v
@@ -45,6 +45,9 @@
 # | stats()                     |
 # | * expose buffer telemetry   |
 # +-----------------------------+
+#     |
+#     v
+# [ END ]
 #
 # ================================================================
 

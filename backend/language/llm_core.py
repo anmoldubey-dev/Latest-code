@@ -7,47 +7,47 @@
 #     v
 # +-----------------------------+
 # | _build_final_system()       |
-# | * compose Gemini system     |
+# | * compose Gemini prompt     |
 # +-----------------------------+
 #     |
 #     |----> build_system_prompt()
-#     |        * persona plus language rule
+#     |        * base persona assembly
 #     |
 #     v
 # +-----------------------------+
 # | _gemini_sync()              |
-# | * blocking Gemini inference |
+# | * blocking Gemini call      |
 # +-----------------------------+
 #     |
 #     |----> _build_final_system()
-#     |        * assemble full system prompt
+#     |        * assemble system prompt
 #     |
 #     |----> <GeminiResponder> -> generate_content()
-#     |        * call Gemini Flash API
+#     |        * call Gemini API
 #     |
 #     v
 # +-----------------------------+
 # | _build_qwen_system()        |
-# | * compose compact Qwen prompt|
+# | * compose Qwen prompt       |
 # +-----------------------------+
 #     |
 #     |----> extract_agent_name()
-#     |        * parse name from voice stem
+#     |        * parse agent name
 #     |
 #     v
 # +-----------------------------+
 # | _qwen_sync()                |
-# | * blocking Ollama inference |
+# | * blocking Ollama call      |
 # +-----------------------------+
 #     |
 #     |----> _build_qwen_system()
-#     |        * assemble compact system prompt
+#     |        * assemble Qwen prompt
 #     |
 #     |----> post()
-#     |        * call Ollama HTTP API
+#     |        * call Ollama API
 #     |
 #     v
-# [ RETURN AI reply string ]
+# [ END ]
 #
 # ================================================================
 
@@ -63,8 +63,11 @@ from backend.core.state import _m
 logger = logging.getLogger("callcenter.llm")
 
 
-def _build_final_system(lang: str, voice_name: str, rag_context: str = "", customer_context: str = "") -> str:
-    base = build_system_prompt(lang, voice_name)
+def _build_final_system(lang: str, voice_name: str, rag_context: str = "", customer_context: str = "", custom_prompt_text: str = None) -> str:
+    if custom_prompt_text:
+        base = custom_prompt_text
+    else:
+        base = build_system_prompt(lang, voice_name)
     parts = [base]
 
     company_context = _m.get("company_context", "")
@@ -82,17 +85,22 @@ def _build_final_system(lang: str, voice_name: str, rag_context: str = "", custo
     if customer_context:
         parts.append(customer_context)
 
+    parts.append(
+        "STRICT LENGTH RULE: Reply in only 1-2 short sentences. "
+        "Maximum 3 sentences only if answering a complex question. "
+        "Keep it conversational and brief, like a real phone call."
+    )
     return "\n\n".join(parts)
 
 
-def _gemini_sync(history: List[dict], lang: str, voice_name: str, rag_context: str = "", customer_context: str = "") -> str:
+def _gemini_sync(history: List[dict], lang: str, voice_name: str, rag_context: str = "", customer_context: str = "", custom_prompt_text: str = None) -> str:
     resp = _m.get("gemini")
     if resp is None:
         return "[Gemini unavailable — check GEMINI_API_KEY]"
 
     from google.genai import types
 
-    system_instruction = _build_final_system(lang, voice_name, rag_context, customer_context)
+    system_instruction = _build_final_system(lang, voice_name, rag_context, customer_context, custom_prompt_text)
     contents = [
         types.Content(
             role="user" if t["role"] == "user" else "model",
@@ -106,7 +114,7 @@ def _gemini_sync(history: List[dict], lang: str, voice_name: str, rag_context: s
             contents=contents,
             config=types.GenerateContentConfig(
                 system_instruction=system_instruction,
-                max_output_tokens=200,
+                max_output_tokens=400,
                 temperature=0.7,
             ),
         )
@@ -119,16 +127,20 @@ def _gemini_sync(history: List[dict], lang: str, voice_name: str, rag_context: s
         raise
 
 
-def _build_qwen_system(lang: str, voice_name: str, rag_context: str = "", customer_context: str = "") -> str:
+def _build_qwen_system(lang: str, voice_name: str, rag_context: str = "", customer_context: str = "", custom_prompt_text: str = None) -> str:
     agent_name    = extract_agent_name(voice_name)
     language_rule = LANGUAGE_CONFIG.get(lang, {}).get(
         "llm_rule", "Reply in the same language the user is speaking."
     )
-    base = (
-        f"You are {agent_name}, a human call center agent at SR Comsoft. "
-        f"{language_rule} "
-        "Reply in 1-2 short sentences. Never say you are AI. Be natural."
-    )
+    if custom_prompt_text:
+        base = custom_prompt_text
+    else:
+        base = (
+            f"You are {agent_name}, a human call center agent at SR Comsoft. "
+            f"{language_rule} "
+            "Reply in 1-2 short sentences. Never say you are AI. Be natural. "
+            "Strictly brief responses only."
+        )
     parts = [base]
 
     company_context = _m.get("company_context", "")
@@ -144,8 +156,8 @@ def _build_qwen_system(lang: str, voice_name: str, rag_context: str = "", custom
     return "\n\n".join(parts)
 
 
-def _qwen_sync(history: List[dict], lang: str, voice_name: str, rag_context: str = "", customer_context: str = "") -> str:
-    system_instruction = _build_qwen_system(lang, voice_name, rag_context, customer_context)
+def _qwen_sync(history: List[dict], lang: str, voice_name: str, rag_context: str = "", customer_context: str = "", custom_prompt_text: str = None) -> str:
+    system_instruction = _build_qwen_system(lang, voice_name, rag_context, customer_context, custom_prompt_text)
     messages = [{"role": "system", "content": system_instruction}]
     for t in history[-6:]:
         messages.append({
@@ -162,8 +174,8 @@ def _qwen_sync(history: List[dict], lang: str, voice_name: str, rag_context: str
                 "keep_alive": -1,
                 "options": {
                     "temperature": 0.7,
-                    "num_predict": 100,
-                    "num_ctx":     1024,
+                    "num_predict": 400,
+                    "num_ctx":     2048,
                 },
             },
             timeout=90,

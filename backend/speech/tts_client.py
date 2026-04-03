@@ -13,15 +13,14 @@
 #     v
 # +-----------------------------+
 # | _humanize_text()            |
-# | * normalize LLM reply text  |
+# | * normalize target text     |
 # +-----------------------------+
 #     |
 #     |----> _normalize_for_tts()
-#     |        * transliterate English to native script
+#     |        * transliterate to native script
 #     |
 #     |----> endswith()
 #     |        * ensure terminal punctuation
-#     |
 #     |
 #     v
 # +-----------------------------+
@@ -30,7 +29,7 @@
 # +-----------------------------+
 #     |
 #     |----> run_in_executor()
-#     |        * offload blocking HTTP call
+#     |        * offload HTTP call
 #     |
 #     v
 # +-----------------------------+
@@ -39,13 +38,13 @@
 # +-----------------------------+
 #     |
 #     |----> post()
-#     |        * POST to /generate endpoint
+#     |        * POST to generate endpoint
 #     |
 #     |----> get()
 #     |        * download WAV bytes
 #     |
 #     v
-# [ RETURN raw WAV bytes ]
+# [ END ]
 #
 # ================================================================
 # SERVICE ROUTING TABLE

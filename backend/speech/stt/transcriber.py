@@ -1,8 +1,7 @@
 # ================================================================
 # FILE EXECUTION FLOW
 # ================================================================
-# check via frontend http://localhost:8000/stt-test
-
+#
 # ── StreamingTranscriber (real-time, used by app.py) ─────────────────────
 #
 # [ START ]
@@ -10,66 +9,66 @@
 #     v
 # +------------------------------------------+
 # | __init__()                               |
-# | * load Whisper on CUDA or CPU            |
+# | * load Whisper model                     |
 # +------------------------------------------+
 #     |
 #     |----> _best_device()
-#     |        * pick CUDA float16 or CPU float32
+#     |        * pick CUDA or CPU
 #     |
 #     v
 # +------------------------------------------+
 # | transcribe_pcm()                         |
-# | * PCM utterance to text string           |
+# | * PCM to text string                     |
 # +------------------------------------------+
 #     |
 #     |----> process_audio_for_stt()
-#     |        * resample to 16k mono numpy
+#     |        * resample to 16k mono
 #     |
 #     |----> _build_prompt()
-#     |        * merge INDIC_PROMPTS and seed
+#     |        * merge context prompts
 #     |
 #     |----> <WhisperModel> -> transcribe()
-#     |        * Whisper inference with VAD
+#     |        * Whisper inference
 #     |
 #     |----> _script_ok()
-#     |        * validate native script output
+#     |        * validate script output
 #     |
 #     v
-# [ RETURN transcribed text string ]
+# [ END ]
 #
-# ── AudioTranscriber (batch WAV, used by main.py) ─────────────────────────
+# ── AudioTranscriber ──────────────────────────────────────────────────────
 #
 # [ START ]
 #     |
 #     v
 # +------------------------------------------+
 # | __init__()                               |
-# | * load Whisper on given device           |
+# | * load Whisper on device                 |
 # +------------------------------------------+
 #     |
 #     |----> _best_device()
-#     |        * pick CUDA float16 or CPU float32
+#     |        * pick CUDA or CPU
 #     |
 #     v
 # +------------------------------------------+
 # | transcribe()                             |
-# | * WAV file path to text dict             |
+# | * WAV path to text                       |
 # +------------------------------------------+
 #     |
 #     |----> process_audio_for_stt()
-#     |        * resample file to 16k numpy
+#     |        * resample file to 16k
 #     |
 #     |----> _build_prompt()
-#     |        * merge INDIC_PROMPTS and seed
+#     |        * merge context prompts
 #     |
 #     |----> <WhisperModel> -> transcribe()
-#     |        * Whisper inference with VAD
+#     |        * Whisper inference
 #     |
 #     |----> _script_ok()
-#     |        * validate native script output
+#     |        * validate script output
 #     |
 #     v
-# [ RETURN dict: text, language, confidence, segments ]
+# [ END ]
 #
 # ================================================================
 # SUPPORTED LANGUAGES (whisper-large-v3)

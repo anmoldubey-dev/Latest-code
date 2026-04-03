@@ -7,42 +7,41 @@
 #     v
 # +-----------------------------+
 # | extract_agent_name()        |
-# | * parse name from voice     |
+# | * resolve agent identity    |
 # +-----------------------------+
 #     |
 #     |----> split()
-#     |        * extract from "Name (Role)" format
-#     |      OR
+#     |        * parse voice name
+#     |
 #     |----> title()
-#     |        * fallback title-case from Piper stem
+#     |        * format display name
 #     |
 #     v
 # +-----------------------------+
 # | build_system_prompt()       |
-# | * compose full LLM prompt   |
+# | * compose LLM persona       |
 # +-----------------------------+
 #     |
 #     |----> extract_agent_name()
-#     |        * resolve agent display name
+#     |        * get agent name
 #     |
 #     |----> format()
-#     |        * inject agent name into persona
+#     |        * inject name to prompt
 #     |
 #     v
 # +-----------------------------+
 # | generate_greeting()         |
-# | * build localized greeting  |
+# | * build start greeting      |
 # +-----------------------------+
 #     |
 #     |----> extract_agent_name()
-#     |        * resolve agent display name
+#     |        * get agent name
 #     |
 #     |----> format()
-#     |        * fill name into template
+#     |        * fill greeting template
 #     |
 #     v
-# [ RETURN str ]
-#
+# [ END ]
 # ================================================================
 
 import logging

@@ -11,15 +11,15 @@
 # +-------------------------------+
 #     |
 #     |----> generate_token()
-#     |        * sign browser JWT for room
+#     |        * sign browser JWT
 #     |
 #     |----> ai_worker_task()
-#     |        * spawn background AI worker
+#     |        * spawn background worker
 #     |
 #     v
 # +-------------------------------+
 # | ai_worker_task()              |
-# | * full lifecycle for one call |
+# | * full call lifecycle         |
 # +-------------------------------+
 #     |
 #     |----> <Room> -> connect()
@@ -40,22 +40,22 @@
 #     v
 # +-------------------------------+
 # | _inbound_audio_loop()         |
-# | * receive PCM frames from mic |
+# | * receive mic PCM frames      |
 # +-------------------------------+
 #     |
 #     |----> <AudioBuf> -> push()
 #     |        * buffer and gate PCM
 #     |
 #     |----> <InterruptionDetector> -> update_audio()
-#     |        * detect energy spike barge-in
+#     |        * detect energy barge-in
 #     |
 #     |----> _process_turn()
-#     |        * fire full AI pipeline
+#     |        * fire AI pipeline
 #     |
 #     v
 # +-------------------------------+
 # | _process_turn()               |
-# | * full AI pipeline per turn   |
+# | * turn processing pipeline    |
 # +-------------------------------+
 #     |
 #     |----> stt_sync()
@@ -71,7 +71,7 @@
 #     |        * extract named entities
 #     |
 #     |----> <LLMRouter> -> route()
-#     |        * primary/fallback LLM inference
+#     |        * primary/fallback inference
 #     |
 #     |----> <PersonaEngine> -> modulate_audio()
 #     |        * pitch and speed DSP
@@ -80,7 +80,7 @@
 #     |        * store turn in session
 #     |
 #     |----> <RAGPipeline> -> retrieve()
-#     |        * fetch relevant context chunks
+#     |        * fetch context chunks
 #     |
 #     |----> <SmartSuggestions> -> suggest()
 #     |        * generate reply suggestions
@@ -92,23 +92,25 @@
 #     |        * enqueue WAV to LiveKit
 #     |
 #     |----> save_transcript()
-#     |        * persist turn to IVR API
+#     |        * persist turn to API
 #     |
 #     |----> <ConversationMemory> -> save_interaction()
-#     |        * embed and persist to FAISS
+#     |        * persist to FAISS
 #     |
 #     v
 # +-------------------------------+
 # | _post_call_cleanup()          |
-# | * summarise + persist history |
+# | * summarise and persist history|
 # +-------------------------------+
 #     |
 #     |----> <CallSummarizer> -> summarize()
-#     |        * generate post-call summary
+#     |        * generate call summary
 #     |
 #     |----> <LongTermMemory> -> save_call_record()
 #     |        * persist summary to SQLite
 #
+#     v
+# [ END ]
 # ================================================================
 
 import asyncio

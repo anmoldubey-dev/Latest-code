@@ -7,11 +7,11 @@
 #     v
 # +---------------------------+
 # | log_execution()           |
-# | * wrap sync or async func |
+# | * function logger         |
 # +---------------------------+
 #     |
 #     |----> _set_trace()
-#     |        * inject UUID trace ID
+#     |        * inject trace ID
 #     |
 #     |----> wrapper()
 #     |        * call decorated function
@@ -19,9 +19,8 @@
 #     |----> logger.info()
 #     |        * log elapsed time
 #     |
-#     | (on error)
 #     |----> logger.exception()
-#     |        * log traceback + elapsed
+#     |        * log call traceback
 #     |
 #     v
 # [ END ]

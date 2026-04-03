@@ -12,58 +12,55 @@ API:
     POST /generate    - clone voice and synthesize speech
     POST /preview     - validate reference audio duration only
 
-===========================================================================
-ASCII EXECUTION FLOW
-===========================================================================
-
-  HTTP Request
-       |
-       v
-+----------------------+
-| health()             |
-| * return device info |
-+----------------------+
-       |
-       | OR
-       v
-+----------------------+
-| preview()            |
-| * validate duration  |
-+----------------------+
-       |
-       |----> _wav_duration()
-       |
-       | OR
-       v
-+-------------------------+
-| generate()              |
-| * clone voice, emit WAV |
-+-------------------------+
-       |
-       |----> _wav_duration()
-       |
-       |----> _load()
-       |         |
-       |         |----> _device()
-       |         |
-       |         |----> <ChatterboxTTS> -> from_local()
-       |                      OR
-       |         |----> <ChatterboxTurboTTS> -> from_local()
-       |                      OR
-       |         |----> <ChatterboxMultilingualTTS> -> from_local()
-       |
-       |----> <ChatterboxTTS> -> generate()
-                    OR
-       |----> <ChatterboxTurboTTS> -> generate()
-                    OR
-       |----> <ChatterboxMultilingualTTS> -> generate()
-       |
-       |----> _tensor_to_wav_bytes()
-       |
-       v
-  StreamingResponse (WAV)
-
-===========================================================================
+# ===========================================================================
+# ASCII EXECUTION FLOW
+# ===========================================================================
+#
+# [ START ]
+#     |
+#     v
+# +----------------------+
+# | health()             |
+# | * return device info |
+# +----------------------+
+#     |
+#     v
+# +----------------------+
+# | preview()            |
+# | * validate duration  |
+# +----------------------+
+#     |
+#     |----> _wav_duration()
+#     |        * compute audio seconds
+#     |
+#     v
+# +-------------------------+
+# | generate()              |
+# | * clone voice to WAV    |
+# +-------------------------+
+#     |
+#     |----> _wav_duration()
+#     |        * check input length
+#     |
+#     |----> _load()
+#     |        * lazy-load model
+#     |
+#     |----> _device()
+#     |        * pick CUDA or CPU
+#     |
+#     |----> <ChatterboxTTS> -> from_local()
+#     |        * init from filesystem
+#     |
+#     |----> <ChatterboxTTS> -> generate()
+#     |        * zero-shot inference
+#     |
+#     |----> _tensor_to_wav_bytes()
+#     |        * save to memory
+#     |
+#     v
+# [ END ]
+#
+# ===========================================================================
 """
 
 import io

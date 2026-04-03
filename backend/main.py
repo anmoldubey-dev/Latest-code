@@ -7,47 +7,47 @@
 #     v
 # +--------------------------------------------+
 # | main()                                     |
-# | * parse CLI args, run call loop            |
+# | * parse args and run loop                  |
 # +--------------------------------------------+
 #     |
 #     |----> _init_models()
-#     |        * load Whisper, LLMs, FAISS
+#     |        * load STT, LLM, FAISS
 #     |
 #     |----> load_greetings()
-#     |        * fetch greeting for language
+#     |        * load localized greeting
 #     |
 #     |----> _http_tts_sync()
 #     |        * synthesize greeting audio
 #     |
 #     |----> _play_wav()
-#     |        * play greeting through speakers
+#     |        * play greeting audio
 #     |
 #     |----> _listen_turn()
-#     |        * stream mic until utterance ready
+#     |        * capture mic utterance
 #     |
 #     |----> stt_sync()
-#     |        * Whisper transcription
+#     |        * transcribe speech to text
 #     |
 #     |----> _collapse_repetitions()
-#     |        * remove repeated phrases
+#     |        * clean up repetitions
 #     |
 #     |----> _is_hallucination()
-#     |        * discard Whisper artefacts
+#     |        * filter STT hallucinations
 #     |
 #     |----> _qwen_sync()
-#     |        * LLM reply generation
+#     |        * generate LLM reply
 #     |      OR
 #     |----> _gemini_sync()
-#     |        * LLM reply generation
+#     |        * generate fallback reply
 #     |
 #     |----> _humanize_text()
-#     |        * normalize text for TTS
+#     |        * humanize text output
 #     |
 #     |----> _http_tts_sync()
-#     |        * synthesize reply audio
+#     |        * synthesize AI reply
 #     |
 #     |----> _play_wav()
-#     |        * play reply, detect barge-in
+#     |        * play audio, detect barge-in
 #     |
 #     v
 # [ END ]

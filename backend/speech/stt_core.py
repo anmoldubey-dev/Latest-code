@@ -17,14 +17,10 @@
 #     |        * average PCM samples
 #     |
 #     |----> <StreamingTranscriber> -> transcribe_pcm()
-#     |        * Whisper decode PCM to text
+#     |        * Whisper decode to text
 #     |
 #     v
-# [ RETURN transcribed text string ]
-#
-# NOTE: _collapse_repetitions() and _is_hallucination() live in
-#       backend/stt/postprocessor.py — import from there.
-#
+# [ END ]
 # ================================================================
 
 import logging

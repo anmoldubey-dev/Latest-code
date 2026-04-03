@@ -78,6 +78,103 @@ def save_turn(session_id: str, role: str, text: str, lang: str) -> None:
         logger.warning("[PGMemory] save_turn failed: %s", exc)
 
 
+# ── Avatar Configs ────────────────────────────────────────────────
+
+def init_avatar_table():
+    try:
+        with _connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """CREATE TABLE IF NOT EXISTS avatar_configs (
+                        voice_stem TEXT PRIMARY KEY,
+                        company_name TEXT,
+                        agent_name TEXT,
+                        language TEXT,
+                        gender TEXT,
+                        original_context TEXT,
+                        generated_role TEXT,
+                        generated_prompt TEXT,
+                        generated_greeting TEXT,
+                        custom_style TEXT,
+                        custom_speed TEXT,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )"""
+                )
+            conn.commit()
+        logger.info("[PGMemory] avatar_configs table initialized.")
+    except Exception as exc:
+        logger.warning("[PGMemory] init_avatar_table failed: %s", exc)
+
+def save_avatar_config(
+    voice_stem: str, company_name: str, agent_name: str,
+    language: str, gender: str, original_context: str,
+    generated_role: str, generated_prompt: str,
+    generated_greeting: str, custom_style: str, custom_speed: str
+):
+    try:
+        with _connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """INSERT INTO avatar_configs
+                           (voice_stem, company_name, agent_name, language, gender,
+                            original_context, generated_role, generated_prompt,
+                            generated_greeting, custom_style, custom_speed, updated_at)
+                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, CURRENT_TIMESTAMP)
+                       ON CONFLICT (voice_stem) DO UPDATE SET
+                           company_name = EXCLUDED.company_name,
+                           agent_name = EXCLUDED.agent_name,
+                           language = EXCLUDED.language,
+                           gender = EXCLUDED.gender,
+                           original_context = EXCLUDED.original_context,
+                           generated_role = EXCLUDED.generated_role,
+                           generated_prompt = EXCLUDED.generated_prompt,
+                           generated_greeting = EXCLUDED.generated_greeting,
+                           custom_style = EXCLUDED.custom_style,
+                           custom_speed = EXCLUDED.custom_speed,
+                           updated_at = CURRENT_TIMESTAMP""",
+                    (
+                        voice_stem, company_name, agent_name, language, gender,
+                        original_context, generated_role, generated_prompt,
+                        generated_greeting, custom_style, custom_speed
+                    ),
+                )
+            conn.commit()
+    except Exception as exc:
+        logger.warning("[PGMemory] save_avatar_config failed: %s", exc)
+
+def get_avatar_config(voice_stem: str) -> Optional[dict]:
+    try:
+        with _connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """SELECT voice_stem, company_name, agent_name, language, gender,
+                              original_context, generated_role, generated_prompt,
+                              generated_greeting, custom_style, custom_speed, updated_at
+                       FROM avatar_configs WHERE voice_stem = %s LIMIT 1""",
+                    (voice_stem,),
+                )
+                r = cur.fetchone()
+        if r is None:
+            return None
+        return {
+            "voice_stem": r[0],
+            "company_name": r[1],
+            "agent_name": r[2],
+            "language": r[3],
+            "gender": r[4],
+            "original_context": r[5],
+            "generated_role": r[6],
+            "generated_prompt": r[7],
+            "generated_greeting": r[8],
+            "custom_style": r[9],
+            "custom_speed": r[10],
+            "updated_at": r[11].isoformat() if r[11] else None,
+        }
+    except Exception as exc:
+        logger.warning("[PGMemory] get_avatar_config failed: %s", exc)
+        return None
+
+
 # ── Call records ──────────────────────────────────────────────────
 
 def save_call_record(

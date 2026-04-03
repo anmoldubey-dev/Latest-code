@@ -2,20 +2,13 @@
 # FILE EXECUTION FLOW
 # ================================================================
 #
-# [ DATA SOURCE — no methods defined in this file ]
+# Module-level shared state container.
+# No standalone methods — _m dict is populated by lifespan()
+# and consumed by stt_sync(), _gemini_sync(), and route handlers.
 #
-# Shared dict _m is populated by lifespan() at startup.
-# Consumed by:
-#     |----> stt_sync()
-#     |        * reads shared STT model
-#     |----> _gemini_sync()
-#     |        * reads shared Gemini client
-#     |----> _build_final_system()
-#     |        * reads company context string
-#     |----> _build_qwen_system()
-#     |        * reads company context string
-#     |----> api_voices()
-#     |        * reads voice registry dict
+#     lifespan()        -- writes to _m["stt"], _m["gemini"], etc.
+#     stt_sync()        -- reads  _m["stt"]
+#     _gemini_sync()    -- reads  _m["gemini"]
 #
 # ================================================================
 

@@ -6,19 +6,18 @@
 //     |
 //     v
 // +---------------------------+
-// | main()                    |
-// | * bootstraps React app    |
+// | createRoot()              |
+// | * bootstrap React app     |
 // +---------------------------+
 //     |
-//     |----> ReactDOM.createRoot()
-//     |        * mounts to #root
+//     |----> render()
+//     |        * mount vDOM to DOM
 //     |
 //     |----> App()
-//     |        * rendered inside StrictMode
+//     |        * start main router
 //     |
 //     v
 // [ END ]
-//
 // ================================================================
 
 import React from 'react'

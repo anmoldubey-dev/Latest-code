@@ -5,95 +5,94 @@
 # [ START ]
 #     |
 #     v
-# +---------------------------+
-# | _chunk_text()             |
-# | * split text into chunks  |
-# +---------------------------+
+# +-----------------------------+
+# | _chunk_text()               |
+# | * split text into chunks    |
+# +-----------------------------+
 #     |
 #     v
-# +---------------------------+
-# | _load_file()              |
-# | * read file UTF-8/latin-1 |
-# +---------------------------+
+# +-----------------------------+
+# | _load_file()                |
+# | * read file content         |
+# +-----------------------------+
 #     |
 #     v
-# +---------------------------+
-# | __init__()                |
-# | * init RAG pipeline state |
-# +---------------------------+
+# +-----------------------------+
+# | __init__()                  |
+# | * init pipeline state       |
+# +-----------------------------+
 #     |
 #     v
-# +---------------------------+
-# | _ensure_ready()           |
-# | * lazy-load FAISS + embeds|
-# +---------------------------+
+# +-----------------------------+
+# | _ensure_ready()             |
+# | * lazy-load FAISS index     |
+# +-----------------------------+
 #     |
 #     |----> _ingest_documents()
-#     |        * load docs build index
+#     |        * load and build index
 #     |
 #     v
-# +---------------------------+
-# | _ingest_documents()       |
-# | * chunk docs into FAISS   |
-# +---------------------------+
+# +-----------------------------+
+# | _ingest_documents()         |
+# | * chunk and index docs      |
+# +-----------------------------+
 #     |
 #     |----> _load_file()
-#     |        * read each document
+#     |        * read document file
 #     |
 #     |----> _chunk_text()
-#     |        * split into chunks
+#     |        * split into snippets
 #     |
 #     v
-# +---------------------------+
-# | add_document()            |
-# | * add doc to live index   |
-# +---------------------------+
+# +-----------------------------+
+# | add_document()              |
+# | * add doc to index          |
+# +-----------------------------+
 #     |
 #     |----> _ensure_ready()
-#     |        * init if not ready
+#     |        * lazy-load index
 #     |
 #     v
-# +---------------------------+
-# | rebuild()                 |
-# | * force full re-ingest    |
-# +---------------------------+
+# +-----------------------------+
+# | rebuild()                   |
+# | * force full re-ingest      |
+# +-----------------------------+
 #     |
 #     v
-# +---------------------------+
-# | retrieve()                |
-# | * top-k semantic search   |
-# +---------------------------+
+# +-----------------------------+
+# | retrieve()                  |
+# | * top-k semantic search     |
+# +-----------------------------+
 #     |
 #     |----> _ensure_ready()
-#     |        * init on first call
+#     |        * init index on call
 #     |
-#     |----> similarity_search_with_score()
+#     |----> similarity_search()
 #     |        * FAISS vector search
 #     |
 #     v
-# +---------------------------+
-# | get_context_string()      |
-# | * formatted LLM context   |
-# +---------------------------+
+# +-----------------------------+
+# | get_context_string()        |
+# | * formatted LLM context     |
+# +-----------------------------+
 #     |
 #     |----> retrieve()
 #     |        * fetch relevant chunks
 #     |
 #     v
-# +---------------------------+
-# | stats()                   |
-# | * return pipeline stats   |
-# +---------------------------+
+# +-----------------------------+
+# | stats()                     |
+# | * return pipeline stats     |
+# +-----------------------------+
 #     |
 #     v
-# +---------------------------+
-# | get_rag_pipeline()        |
-# | * singleton factory       |
-# +---------------------------+
+# +-----------------------------+
+# | get_rag_pipeline()          |
+# | * singleton factory         |
+# +-----------------------------+
 #     |
 #     v
 # [ END ]
-#
 # ================================================================
 
 """

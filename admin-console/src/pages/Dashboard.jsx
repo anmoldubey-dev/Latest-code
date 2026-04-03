@@ -11,7 +11,7 @@
 // +---------------------------+
 //     |
 //     |----> StatusPill()
-//     |        * displays online/offline
+//     |        * display service health
 //     |
 //     v
 // +---------------------------+
@@ -26,20 +26,19 @@
 // +---------------------------+
 //     |
 //     |----> useServiceHealth()
-//     |        * polls 6 service statuses
+//     |        * poll service statuses
 //     |
 //     |----> useEffect()
-//     |        * fetches TTS health on mount
+//     |        * fetch TTS health
 //     |
 //     |----> ServiceCard()
-//     |        * renders enriched services
+//     |        * render service cards
 //     |
 //     |----> ActivityFeed()
-//     |        * renders activity log
+//     |        * render activity feed
 //     |
 //     v
 // [ END ]
-//
 // ================================================================
 
 import React, { useState, useEffect } from 'react'

@@ -246,9 +246,12 @@ function AvatarCard({ persona, onEdit, onDelete }) {
 // ─── Edit Modal ───────────────────────────────────────────────────
 function EditModal({ persona, onSave, onClose }) {
   const [form, setForm]                   = useState({ ...persona });
-  const [behaviorPrompt, setBehaviorPrompt] = useState("");
+  const [contextText, setContextText]     = useState("");
+  const [companyName, setCompanyName]     = useState("");
+  const [fileContent, setFileContent]     = useState("");
   const [ollamaStatus, setOllamaStatus]   = useState(null);
   const [ollamaError, setOllamaError]     = useState("");
+  const [manualGreeting, setManualGreeting] = useState(persona.generated_greeting || "");
 
   // Preview playback state
   const [previewText, setPreviewText]     = useState("");
@@ -274,6 +277,16 @@ function EditModal({ persona, onSave, onClose }) {
         ? f.lang_codes.filter(l => l !== code)
         : [...f.lang_codes, code],
     }));
+  };
+
+  const handleContextFile = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      setFileContent(evt.target.result);
+    };
+    reader.readAsText(file);
   };
 
   // Validate ref audio duration 15-30s
@@ -404,7 +417,7 @@ function EditModal({ persona, onSave, onClose }) {
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
           <h3 style={{ color: "#f9fafb", margin: 0 }}>
-            {form.is_fixed ? `${form.display_name} - (Preview Beta)` : `Configure Cloned Persona`}
+            {form.display_name}
           </h3>
           <span style={{
             background: ttsType === "indic" ? "#06403033" : "#1e3a8a33",
@@ -416,75 +429,58 @@ function EditModal({ persona, onSave, onClose }) {
         </div>
 
         {/* Fixed Personas vs Cloned Personas Logic */}
-        {!form.is_fixed ? (
-          <>
-            {sectionLabel("Identity")}
-            {field("display_name", "Display Name")}
-            {field("name",         "Internal Name")}
-            {field("avatar_emoji", "Avatar Emoji")}
-            
-            {sectionLabel("Languages (Cloner supports EN / HI)")}
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14 }}>
-              {LANG_OPTIONS.filter(l => CLONE_SUPPORTED_LANGS.includes(l.code)).map(l => {
-                const sel = form.lang_codes.includes(l.code);
-                return (
-                  <button key={l.code} onClick={() => toggleLang(l.code)}
-                    style={{ background: sel ? "#4f46e5" : "#1f2937",
-                             color: sel ? "#fff" : "#9ca3af",
-                             border: `1px solid ${sel ? "#4f46e5" : "#374151"}`,
-                             borderRadius: 8, padding: "4px 10px", cursor: "pointer", fontSize: 12 }}>
-                    {l.label}
-                  </button>
-                );
-              })}
-            </div>
+          <></>
 
-            {sectionLabel("Voice Cloning (Required)")}
-            <div style={{ background: "#0d1117", borderRadius: 8, padding: "12px 14px", marginBottom: 14 }}>
-              <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 10 }}>
-                Upload a 15-30 second clear audio clip to mimic.
-              </div>
-              <div>
-                <label style={{ display: "block", color: "#9ca3af", fontSize: 12, marginBottom: 4 }}>
-                  Reference Audio
-                </label>
-                <input type="file" accept="audio/*" onChange={handleCloneAudio}
-                  style={{ color: "#9ca3af", fontSize: 12 }} />
-                {cloneValidErr && <div style={{ color: "#f87171", fontSize: 12, marginTop: 4 }}>{cloneValidErr}</div>}
-                {cloneAudio && !cloneValidErr && (
-                  <div style={{ color: "#4ade80", fontSize: 12, marginTop: 4 }}>✓ Attached</div>
-                )}
-              </div>
-            </div>
-          </>
-        ) : (
-          <div style={{ marginBottom: 14, color: "#9ca3af", fontSize: 13, background: "#1f2937", padding: "12px", borderRadius: 8 }}>
-            <span style={{color: "#facc15", fontWeight: 600}}>STATIC VOICE:</span> You are previewing a permanent Parler TTS identity. You cannot change its base name, language, or clone its voice. You can only adjust its Pitch, Speed, and AI Behavior Pipeline.
-          </div>
-        )}
-
-        {sectionLabel("AI Behavior Prompt")}
-        <textarea value={behaviorPrompt}
-          onChange={e => setBehaviorPrompt(e.target.value)}
+        {sectionLabel("AI Behavior Configuration")}
+        <div style={{ marginBottom: 14 }}>
+            <label style={{ display: "block", color: "#9ca3af", fontSize: 12, marginBottom: 4 }}>Company Name (for auto-greeting)</label>
+            <input type="text" value={companyName} onChange={e => setCompanyName(e.target.value)}
+                   placeholder="e.g. SR Comsoft"
+                   style={{ width: "100%", background: "#1f2937", border: "1px solid #374151",
+                            borderRadius: 6, padding: "8px 12px", color: "#f9fafb", fontSize: 13, boxSizing: "border-box" }} />
+        </div>
+        <div style={{ marginBottom: 14 }}>
+            <label style={{ display: "block", color: "#9ca3af", fontSize: 12, marginBottom: 4 }}>Custom Greeting (Optional - AI will rephrase/transliterate)</label>
+            <input type="text" value={manualGreeting} onChange={e => setManualGreeting(e.target.value)}
+                   placeholder="e.g. Namaste, I am Divya from SR Comsoft..."
+                   style={{ width: "100%", background: "#1f2937", border: "1px solid #374151",
+                            borderRadius: 6, padding: "8px 12px", color: "#f9fafb", fontSize: 13, boxSizing: "border-box" }} />
+        </div>
+        <div style={{ marginBottom: 14 }}>
+            <label style={{ display: "block", color: "#9ca3af", fontSize: 12, marginBottom: 4 }}>Upload Context (.txt file) — Optional</label>
+            <input type="file" accept=".txt" onChange={handleContextFile}
+                   style={{ color: "#9ca3af", fontSize: 12 }} />
+            {fileContent && <div style={{ color: "#4ade80", fontSize: 11, marginTop: 4 }}>✓ File loaded ({fileContent.length} chars)</div>}
+        </div>
+        <label style={{ display: "block", color: "#9ca3af", fontSize: 12, marginBottom: 4 }}>Manual Context / Behavior Instructions</label>
+        <textarea value={contextText}
+          onChange={e => setContextText(e.target.value)}
           rows={3}
-          placeholder='e.g. "Should sound very warm and slow, like a caring teacher" — any language'
+          placeholder='e.g. You are a support agent. You handle billing issues. Keep it professional.'
           style={{ width: "100%", background: "#1f2937", border: "1px solid #374151",
                    borderRadius: 6, padding: "8px 12px", color: "#f9fafb",
                    fontSize: 13, resize: "vertical", boxSizing: "border-box", marginBottom: 8 }} />
         {form.custom_style && (
           <div style={{ fontSize: 11, color: "#6b7280", marginBottom: 8 }}>
-            Locked → style: <span style={{ color: "#a3e635" }}>{form.custom_style}</span>
+            Locked → TTS style: <span style={{ color: "#a3e635" }}>{form.custom_style}</span>
             {" · "}speed: <span style={{ color: "#a3e635" }}>{form.custom_speed}</span>
             {" "}
-            <button onClick={() => setForm(f => ({ ...f, custom_style: null, custom_speed: null }))}
+            <button onClick={() => setForm(f => ({ ...f, custom_style: null, custom_speed: null, generated_prompt: null, generated_greeting: null }))}
               style={{ background: "none", border: "none", color: "#ef4444",
                        cursor: "pointer", fontSize: 11, padding: 0 }}>clear</button>
+          </div>
+        )}
+        {form.generated_prompt && (
+          <div style={{ background: "#064e3b", color: "#fff", padding: "10px", borderRadius: "8px", fontSize: "12px", marginBottom: "8px" }}>
+             <strong>Generated Role:</strong> {form.generated_role}<br/>
+             <strong>Greeting:</strong> {form.generated_greeting}<br/>
+             <strong>System Prompt Snippet:</strong> {form.generated_prompt.substring(0, 80)}...
           </div>
         )}
         {ollamaStatus === "loading" && (
           <div style={{ padding: "10px 14px", background: "#1c1f26", border: "1px solid #374151",
                         borderRadius: 8, fontSize: 13, color: "#facc15", marginBottom: 8 }}>
-            Translating and formatting persona for TTS... may take up to 5 minutes.
+            Translating context and formatting persona capabilities... may take a minute.
           </div>
         )}
         {ollamaStatus === "error" && (
@@ -494,20 +490,35 @@ function EditModal({ persona, onSave, onClose }) {
         {ollamaStatus === "done" && (
           <div style={{ padding: "10px 14px", background: "#052e16", borderRadius: 8,
                         fontSize: 13, color: "#4ade80", marginBottom: 8 }}>
-            Behavior applied. Voice identity preserved.
+            Behavior and Greeting generated via AI!
           </div>
         )}
-        {behaviorPrompt.trim() && (
+        {(contextText.trim() || fileContent.trim()) && (
           <button disabled={ollamaStatus === "loading"}
             onClick={async () => {
               setOllamaStatus("loading"); setOllamaError("");
               try {
-                const callTtsType = form.is_fixed ? form.tts_type : ttsTypeForLangs(form.lang_codes);
-                const res = await backendApi.summarizePersona({
-                  raw_prompt: behaviorPrompt.trim(),
-                  tts_type: callTtsType,
+                const firstLang = form.lang_codes[0] || "en";
+                const vName = form.is_fixed ? form.fixed_voice : primaryVoice;
+                const combinedContext = [contextText.trim(), fileContent.trim()].filter(Boolean).join("\n\n");
+                
+                const res = await backendApi.configureAvatar({
+                  voice_stem: vName,
+                  company_name: companyName.trim() || "Our Company",
+                  agent_name: persona.display_name,
+                  language: firstLang,
+                  gender: gender,
+                  context_text: combinedContext + (manualGreeting ? `\n\nREQUIRED GREETING: ${manualGreeting}` : ""),
                 });
-                setForm(f => ({ ...f, custom_style: res.style, custom_speed: res.speed_desc }));
+                setForm(f => ({ 
+                    ...f, 
+                    custom_style: res.config.style, 
+                    custom_speed: res.config.speed_desc,
+                    generated_prompt: res.config.prompt,
+                    generated_greeting: res.config.greeting,
+                    generated_role: res.config.role
+                }));
+                setManualGreeting(res.config.greeting);
                 setOllamaStatus("done");
               } catch (err) {
                 setOllamaStatus("error");
@@ -518,7 +529,7 @@ function EditModal({ persona, onSave, onClose }) {
                      color: "#fff", border: "none", borderRadius: 8, padding: "8px 20px",
                      cursor: ollamaStatus === "loading" ? "not-allowed" : "pointer",
                      fontWeight: 600, fontSize: 13, marginBottom: 4 }}>
-            {ollamaStatus === "loading" ? "Analyzing..." : "Apply Behavior via AI"}
+            {ollamaStatus === "loading" ? "Generating Persona..." : "Apply Behavior via AI"}
           </button>
         )}
 
@@ -594,6 +605,17 @@ function EditModal({ persona, onSave, onClose }) {
 export default function AvatarManager() {
   const [personas, setPersonas] = useState(INITIAL_PERSONAS);
   const [editing,  setEditing]  = useState(null);
+  const [search,   setSearch]   = useState("");
+
+  const filteredPersonas = personas.filter(p => {
+    const s = search.toLowerCase();
+    const matchesName = p.display_name.toLowerCase().includes(s);
+    const matchesLang = p.lang_codes.some(l => {
+      const opt = LANG_OPTIONS.find(o => o.code === l);
+      return opt?.label.toLowerCase().includes(s) || l.toLowerCase().includes(s);
+    });
+    return matchesName || matchesLang;
+  });
 
   const handleSave = useCallback((updated) => {
     setPersonas(ps => ps.map(p => p.id === updated.id ? updated : p));
@@ -628,11 +650,12 @@ export default function AvatarManager() {
             Configure voice agent personas — TTS backend auto-selected by language
           </p>
         </div>
-        <button onClick={handleAdd}
-          style={{ background: "#4f46e5", color: "#fff", border: "none", borderRadius: 8,
-                   padding: "10px 20px", cursor: "pointer", fontWeight: 600, fontSize: 14 }}>
-          + New Persona
-        </button>
+        <div style={{ display: "flex", gap: 10 }}>
+          <input type="text" placeholder="Search by name or language..." value={search}
+                 onChange={e => setSearch(e.target.value)}
+                 style={{ background: "#111827", border: "1px solid #1f2937", borderRadius: 8,
+                          padding: "10px 16px", color: "#f9fafb", fontSize: 14, minWidth: 240 }} />
+        </div>
       </div>
 
       <div style={{ display: "flex", gap: 12, marginBottom: 24, flexWrap: "wrap" }}>
@@ -652,7 +675,7 @@ export default function AvatarManager() {
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))", gap: 16 }}>
-        {personas.map(p => (
+        {filteredPersonas.map(p => (
           <AvatarCard key={p.id} persona={p} onEdit={setEditing} onDelete={handleDelete} />
         ))}
       </div>

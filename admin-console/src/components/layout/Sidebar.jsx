@@ -25,8 +25,8 @@ import React from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, Activity, Mic2, Globe2,
-  Languages, Database, Radio, BrainCircuit, Settings, Cpu,
-  ShieldCheck, UserCircle2, BarChart3, PhoneCall, Search,
+  Languages, Database, Radio, BrainCircuit,
+  UserCircle2, BarChart3, PhoneCall, Search,
 } from 'lucide-react'
 
 const NAV = [
@@ -40,12 +40,7 @@ const NAV = [
   { to: '/sessions',   label: 'Call Sessions',     icon: PhoneCall },
   { to: '/rag-search', label: 'RAG Search',        icon: Search },
   { to: '/memory',     label: 'Memory Explorer',  icon: Database },
-  { to: '/livekit',    label: 'Live Sessions',    icon: Globe2 },
-  { to: '/llm',        label: 'LLM Config',       icon: BrainCircuit },
-  { to: '/pipeline',   label: 'Audio Pipeline',   icon: Cpu },
   { to: '/avatars',    label: 'Avatar Manager',   icon: UserCircle2 },
-  { to: '/rbac',       label: 'Access Control',   icon: ShieldCheck },
-  { to: '/settings',   label: 'Settings',         icon: Settings },
 ]
 
 export default function Sidebar() {

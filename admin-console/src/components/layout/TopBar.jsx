@@ -37,10 +37,7 @@ const ROUTE_TITLES = {
   '/stt':       'STT Diagnostics',
   '/languages': 'Language Config',
   '/memory':    'Memory Explorer',
-  '/livekit':   'LiveKit Sessions',
   '/llm':       'LLM Config',
-  '/pipeline':  'Audio Pipeline',
-  '/settings':  'Settings',
 }
 
 export default function TopBar() {
