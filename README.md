@@ -322,7 +322,47 @@ cd admin-console && npm run dev   # admin console (separate terminal)
 
 ## Screenshots
 
-Developer Forgot to add on the way
+Admin Console 
+
+Dashboard 
+<img width="1919" height="877" alt="image" src="https://github.com/user-attachments/assets/9ca6e3dd-c895-4269-ace4-485845cfea69" />
+
+Services Monitor
+<img width="1919" height="875" alt="image" src="https://github.com/user-attachments/assets/e906fd6f-6e2a-47d7-92d2-e8a6bd9fc49b" />
+
+<img width="1919" height="878" alt="image" src="https://github.com/user-attachments/assets/302d1432-0cd6-456a-86d5-5b69669b82e1" />
+
+Voice Labs
+<img width="1919" height="874" alt="image" src="https://github.com/user-attachments/assets/62a5fff1-8afb-464d-9801-bb3b65a5c86e" />
+Stt  Diagnostic
+<img width="1919" height="855" alt="image" src="https://github.com/user-attachments/assets/0a1d30ae-f82a-4484-859d-1327d056d026" />
+Translator
+<img width="1919" height="880" alt="image" src="https://github.com/user-attachments/assets/0708b27f-9fd1-452b-8aaf-b81ddaac1f9e" />
+Language Config
+<img width="1919" height="873" alt="image" src="https://github.com/user-attachments/assets/db3b1d49-9062-4041-a8c9-c02775c1279b" />
+Call Session
+<img width="1919" height="864" alt="image" src="https://github.com/user-attachments/assets/40706201-3bc1-4c23-a195-e647ea18a82d" />
+<img width="1919" height="865" alt="image" src="https://github.com/user-attachments/assets/dce98223-1c12-44c3-be93-a523e8f7b799" />
+<img width="1919" height="882" alt="image" src="https://github.com/user-attachments/assets/e36b4061-a2fb-4e9b-bfd9-651680ea2da5" />
+
+Rag Search
+<img width="1919" height="874" alt="image" src="https://github.com/user-attachments/assets/9917753a-c416-4eff-b155-3ef6292e1577" />
+
+<img width="1918" height="357" alt="image" src="https://github.com/user-attachments/assets/7f9fb45d-598a-4bb9-9b7e-2d2d35f28dce" />
+
+Memory Exlorer 
+<img width="1919" height="876" alt="image" src="https://github.com/user-attachments/assets/fe997b27-e140-4a77-8686-63053268dd2d" />
+
+Avtar Manager 
+<img width="1919" height="868" alt="image" src="https://github.com/user-attachments/assets/a0cbf62a-746c-49e4-93dc-89aa0ef9676f" />
+
+<img width="1919" height="860" alt="image" src="https://github.com/user-attachments/assets/7d0fd024-d984-42a7-9afc-d8df1bbd4657" />
+
+
+
+
+
+
 
 ---
 
