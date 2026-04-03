@@ -1,3 +1,26 @@
+# =============================================================================
+# FILE: post_call.py
+# DESC: Background cleanup tasks after a WebSocket call session closes.
+# =============================================================================
+#
+# EXECUTION FLOW
+# =============================================================================
+#
+#  +--------------------------------+
+#  | _post_call_tasks()             |
+#  | * orchestrate post-call steps  |
+#  +--------------------------------+
+#           |
+#           |----> _write_wav()          (if audio_chunks present)
+#           |
+#           |----> <diarization> -> diarize()
+#           |                           (if wav saved + diarization available)
+#           |
+#           |----> <pg_memory> -> save_call_record()
+#                                       (if pg_memory + session_turns present)
+#
+# =============================================================================
+
 import asyncio
 import os
 import wave

@@ -1,3 +1,34 @@
+# =============================================================================
+# FILE: avatar_routes.py
+# DESC: Avatar persona generation and configuration via LLM backends.
+# =============================================================================
+#
+# EXECUTION FLOW
+# =============================================================================
+#
+#  +---------------------------------+
+#  | summarize_persona()             |
+#  | * parse tts_type, call LLM      |
+#  +---------------------------------+
+#           |
+#           |----> _call_gemini()        (if AVATAR_SUMMARY_AI == "gemini")
+#                 OR
+#           |----> _call_ollama()        (if AVATAR_SUMMARY_AI == "ollama")
+#           |
+#           v
+#  +---------------------------------+
+#  | configure_avatar()              |
+#  | * build persona prompt, call LLM|
+#  +---------------------------------+
+#           |
+#           |----> _call_gemini()        (if AVATAR_SUMMARY_AI == "gemini")
+#                 OR
+#           |----> _call_ollama()        (if AVATAR_SUMMARY_AI == "ollama")
+#           |
+#           |----> <pg_memory> -> save_avatar_config()
+#
+# =============================================================================
+
 import asyncio
 import json
 import os
