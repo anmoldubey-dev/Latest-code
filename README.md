@@ -296,21 +296,7 @@ Services start on:
 
 ## Screenshots
 
-> Admin Console — Services Monitor
-
-![Services Monitor](docs/screenshots/services_monitor.png)
-
-> Admin Console — Voice Lab
-
-![Voice Lab](docs/screenshots/voice_lab.png)
-
-> Admin Console — Translator
-
-![Translator](docs/screenshots/translator.png)
-
-> Admin Console — STT Diagnostics
-
-![STT Diagnostics](docs/screenshots/stt_diagnostics.png)
+Developer Forgot to add on the way
 
 ---
 
