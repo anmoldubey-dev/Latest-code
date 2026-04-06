@@ -26,9 +26,10 @@
 
 import React from 'react'
 import { useLocation } from 'react-router-dom'
-import { RefreshCw } from 'lucide-react'
+import { RefreshCw, Menu } from 'lucide-react'
 import StatusPill from '../ui/StatusPill.jsx'
 import { useServiceHealth } from '../../hooks/useServiceHealth.js'
+import { useSidebar } from './Layout.jsx'
 
 const ROUTE_TITLES = {
   '/':          'Dashboard',
@@ -45,6 +46,7 @@ export default function TopBar() {
   const title = ROUTE_TITLES[location.pathname] ?? 'Admin Console'
   const { onlineCount, services, lastUpdated } = useServiceHealth(8000)
   const allOnline = onlineCount === services.length && services.length > 0
+  const { toggle } = useSidebar()
 
   const ts = lastUpdated
     ? lastUpdated.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
@@ -66,9 +68,26 @@ export default function TopBar() {
       top: 0,
       zIndex: 40,
     }}>
-      <h2 style={{ fontSize: 14, fontWeight: 600, color: '#f0ece3', letterSpacing: '-0.015em' }}>
-        {title}
-      </h2>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button
+          className="topbar-hamburger"
+          onClick={toggle}
+          style={{
+            display: 'none',
+            alignItems: 'center', justifyContent: 'center',
+            width: 32, height: 32,
+            borderRadius: 8,
+            color: 'var(--text-primary)',
+            background: 'rgba(255,255,255,0.05)',
+            border: '1px solid var(--border)',
+          }}
+        >
+          <Menu size={15} />
+        </button>
+        <h2 style={{ fontSize: 14, fontWeight: 600, color: '#f0ece3', letterSpacing: '-0.015em' }}>
+          {title}
+        </h2>
+      </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <div style={{ display: 'flex', gap: 5 }}>

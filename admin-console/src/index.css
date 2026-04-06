@@ -223,3 +223,44 @@ select option { background: var(--bg-elevated); color: var(--text-primary); }
   animation: shimmer 1.6s infinite;
   border-radius: var(--r-xs);
 }
+
+/* ── Mobile Responsive ────────────────────────────────────────── */
+@media (max-width: 768px) {
+  :root { --sidebar-w: 0px; }
+
+  .layout-root { flex-direction: column !important; }
+
+  .sidebar {
+    position: fixed !important;
+    left: -220px !important;
+    top: 0 !important;
+    width: 220px !important;
+    height: 100vh !important;
+    transition: left var(--t-med) !important;
+    z-index: 100 !important;
+  }
+  .sidebar.open { left: 0 !important; }
+
+  .layout-content {
+    margin-left: 0 !important;
+    width: 100% !important;
+  }
+
+  .layout-main { padding: 16px !important; }
+
+  .dash-metrics {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  .dash-services {
+    grid-template-columns: 1fr !important;
+  }
+
+  .topbar-hamburger { display: flex !important; }
+  .sidebar-overlay { display: block !important; }
+}
+
+@media (max-width: 480px) {
+  .dash-metrics { grid-template-columns: 1fr !important; }
+  .layout-main { padding: 12px !important; }
+}

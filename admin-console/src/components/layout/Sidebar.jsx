@@ -23,6 +23,7 @@
 
 import React from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
+import { useSidebar } from './Layout.jsx'
 import {
   LayoutDashboard, Activity, Mic2, Globe2,
   Languages, Database, Radio, BrainCircuit,
@@ -45,8 +46,9 @@ const NAV = [
 
 export default function Sidebar() {
   const location = useLocation()
+  const { open, toggle } = useSidebar()
   return (
-    <aside style={{
+    <aside className={`sidebar${open ? ' open' : ''}`} style={{
       width: 'var(--sidebar-w)',
       flexShrink: 0,
       height: '100vh',
@@ -99,7 +101,7 @@ export default function Sidebar() {
         {NAV.map(({ to, label, icon: Icon }) => {
           const active = to === '/' ? location.pathname === '/' : location.pathname.startsWith(to)
           return (
-            <NavLink key={to} to={to} style={{
+            <NavLink key={to} to={to} onClick={() => open && toggle()} style={{
               display: 'flex',
               alignItems: 'center',
               gap: 9,
