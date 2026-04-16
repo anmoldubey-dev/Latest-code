@@ -1,0 +1,21 @@
+{
+  "version": "1.1",
+  "description": "AI call routing rules — maps lang to AI voice + LLM",
+  "rules": [
+    { "name": "hindi-ai",      "priority": 10,  "enabled": true, "conditions": { "lang": ["hi"]    }, "target": { "queue_name": "ai-hindi",      "ai_config": { "lang": "hi",    "voice": "Divya (Warm Female)",      "llm": "ollama" }, "fallback_action": "ai_bot" } },
+    { "name": "english-in-ai", "priority": 20,  "enabled": true, "conditions": { "lang": ["en-in"] }, "target": { "queue_name": "ai-en-in",      "ai_config": { "lang": "en-in", "voice": "Aditi (Clear Female)",      "llm": "ollama" }, "fallback_action": "ai_bot" } },
+    { "name": "marathi-ai",    "priority": 30,  "enabled": true, "conditions": { "lang": ["mr"]    }, "target": { "queue_name": "ai-marathi",    "ai_config": { "lang": "mr",    "voice": "Sunita (Fluent Female)",    "llm": "ollama" }, "fallback_action": "ai_bot" } },
+    { "name": "tamil-ai",      "priority": 40,  "enabled": true, "conditions": { "lang": ["ta"]    }, "target": { "queue_name": "ai-tamil",      "ai_config": { "lang": "ta",    "voice": "Kavitha (Clear Female)",    "llm": "ollama" }, "fallback_action": "ai_bot" } },
+    { "name": "telugu-ai",     "priority": 50,  "enabled": true, "conditions": { "lang": ["te"]    }, "target": { "queue_name": "ai-telugu",     "ai_config": { "lang": "te",    "voice": "Padma (Bright Female)",     "llm": "ollama" }, "fallback_action": "ai_bot" } },
+    { "name": "bengali-ai",    "priority": 60,  "enabled": true, "conditions": { "lang": ["bn"]    }, "target": { "queue_name": "ai-bengali",    "ai_config": { "lang": "bn",    "voice": "Riya (Warm Female)",        "llm": "ollama" }, "fallback_action": "ai_bot" } },
+    { "name": "gujarati-ai",   "priority": 65,  "enabled": true, "conditions": { "lang": ["gu"]    }, "target": { "queue_name": "ai-gujarati",   "ai_config": { "lang": "gu",    "voice": "Nisha (Warm Female)",       "llm": "ollama" }, "fallback_action": "ai_bot" } },
+    { "name": "malayalam-ai",  "priority": 66,  "enabled": true, "conditions": { "lang": ["ml"]    }, "target": { "queue_name": "ai-malayalam",  "ai_config": { "lang": "ml",    "voice": "Lakshmi (Soft Female)",     "llm": "ollama" }, "fallback_action": "ai_bot" } },
+    { "name": "punjabi-ai",    "priority": 67,  "enabled": true, "conditions": { "lang": ["pa"]    }, "target": { "queue_name": "ai-punjabi",    "ai_config": { "lang": "pa",    "voice": "Gurpreet (Bright Female)",  "llm": "ollama" }, "fallback_action": "ai_bot" } },
+    { "name": "spanish-ai",    "priority": 70,  "enabled": true, "conditions": { "lang": ["es"]    }, "target": { "queue_name": "ai-spanish",    "ai_config": { "lang": "es",    "voice": "Maria (Warm Female)",       "llm": "ollama" }, "fallback_action": "ai_bot" } },
+    { "name": "french-ai",     "priority": 75,  "enabled": true, "conditions": { "lang": ["fr"]    }, "target": { "queue_name": "ai-french",     "ai_config": { "lang": "fr",    "voice": "Sophie (Clear Female)",     "llm": "ollama" }, "fallback_action": "ai_bot" } },
+    { "name": "german-ai",     "priority": 80,  "enabled": true, "conditions": { "lang": ["de"]    }, "target": { "queue_name": "ai-german",     "ai_config": { "lang": "de",    "voice": "Lena (Bright Female)",      "llm": "ollama" }, "fallback_action": "ai_bot" } },
+    { "name": "arabic-ai",     "priority": 85,  "enabled": true, "conditions": { "lang": ["ar"]    }, "target": { "queue_name": "ai-arabic",     "ai_config": { "lang": "ar",    "voice": "Emma (Warm Female)",        "llm": "ollama" }, "fallback_action": "ai_bot" } },
+    { "name": "english-ai",    "priority": 100, "enabled": true, "conditions": { "lang": ["en"]    }, "target": { "queue_name": "ai-english",    "ai_config": { "lang": "en",    "voice": "Emma (Warm Female)",        "llm": "ollama" }, "fallback_action": "ai_bot" } },
+    { "name": "default-fallback", "priority": 999, "enabled": true, "conditions": {},               "target": { "queue_name": "ai-default",    "ai_config": { "lang": "en",    "voice": "Emma (Warm Female)",        "llm": "ollama" }, "fallback_action": "ai_bot" } }
+  ]
+}

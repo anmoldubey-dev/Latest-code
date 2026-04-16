@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(/home/swayam/miniconda3/envs/serviceA/bin/python3 -c ':*)",
+      "Bash(grep -v \"^$\")",
+      "Bash(wget -q --show-progress \"https://archive.apache.org/dist/kafka/3.7.0/kafka_2.13-3.7.0.tgz\" -O /tmp/kafka.tgz)",
+      "Bash(echo \"Kafka downloading in background PID=$!\")",
+      "Bash(chmod +x /home/swayam/Documents/VoiceAicore/infrastructure/start_kafka.sh /home/swayam/Documents/VoiceAicore/infrastructure/start_livekit.sh)",
+      "Bash(git -C /home/swayam/Documents/VoiceAicore/call-test log --oneline -5)",
+      "Bash(git -C /home/swayam/Documents/VoiceAicore/call-test diff --stat)",
+      "Bash(git -C /home/swayam/Documents/VoiceAicore/call-test add src/App.jsx)",
+      "Bash(git -C /home/swayam/Documents/VoiceAicore/call-test commit -m ':*)",
+      "Bash(xargs cat:*)",
+      "Bash(/home/swayam/miniconda3/envs/serviceA/bin/pip install:*)",
+      "Bash(curl -s -X POST http://localhost:8000/routing/rules/reload)",
+      "Bash(cp src/App.jsx src/AiCallWidget.jsx)",
+      "Bash(cp src/App.css src/AiCallWidget.css)",
+      "Bash(cp -r UI_01/src call-test/src_ui01_tmp)",
+      "Bash(cp UI_01/index.html call-test/index.html)",
+      "Bash(cp UI_01/postcss.config.js call-test/postcss.config.js)",
+      "Bash(cp UI_01/tailwind.config.js call-test/tailwind.config.js)",
+      "Bash(cp UI_01/eslint.config.js call-test/eslint.config.js)",
+      "Bash(npm install:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m ':*)",
+      "Bash(conda list:*)"
+    ]
+  }
+}

@@ -1,0 +1,49 @@
+# Models & weights
+models/
+ollama/
+*.onnx
+*.pt
+*.bin
+*.safetensors
+*.tgz
+
+# Node modules
+node_modules/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.env
+*.egg-info/
+
+# Conda envs
+serviceA/
+serviceB/
+serviceC/
+serviceD/
+serviceE/
+
+# Binaries
+livekit-server
+livekit-server.exe
+libggml-base.so.0
+
+# Runtime data
+logs/
+data/call_recordings/
+outputs/
+
+# Python source tarball
+Python-3.10.11/
+Python-3.10.11.tgz
+
+# Claude settings (may contain tokens)
+.claude/
+
+# Large JARs / Kafka binaries
+
+*.jar
+# Kafka binary distribution (JARs + scripts) — too heavy
+infrastructure/kafka/kafka_2.13-3.7.0/
+*.jar

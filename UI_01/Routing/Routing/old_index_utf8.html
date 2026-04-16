@@ -1,0 +1,981 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Call Test ΓÇö Helen</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', sans-serif; background: #0f1117; color: #e2e8f0; min-height: 100vh; }
+    header { background: #1a1f2e; border-bottom: 1px solid #2d3748; padding: 14px 24px; display: flex; align-items: center; gap: 12px; }
+    header h1 { font-size: 1.1rem; font-weight: 600; color: #90cdf4; }
+    header span { font-size: 0.75rem; color: #718096; }
+    .backend-url { margin-left: auto; font-size: 0.72rem; color: #4a5568; font-family: monospace; }
+    .tabs { display: flex; border-bottom: 1px solid #2d3748; background: #141820; padding: 0 24px; }
+    .tab { padding: 12px 24px; cursor: pointer; font-size: 0.875rem; color: #718096; border-bottom: 2px solid transparent; transition: all 0.15s; }
+    .tab:hover { color: #90cdf4; }
+    .tab.active { color: #90cdf4; border-bottom-color: #4299e1; font-weight: 600; }
+    .panel { display: none; padding: 24px; }
+    .panel.active { display: block; }
+    .card { background: #1a1f2e; border: 1px solid #2d3748; border-radius: 10px; padding: 20px; max-width: 560px; }
+    .card h2 { font-size: 0.95rem; color: #a0aec0; margin-bottom: 16px; font-weight: 600; }
+    .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #4a5568; margin-right: 6px; }
+    .status-dot.green  { background: #48bb78; box-shadow: 0 0 6px #48bb78; }
+    .status-dot.yellow { background: #ecc94b; box-shadow: 0 0 6px #ecc94b; }
+    .status-dot.red    { background: #fc8181; box-shadow: 0 0 6px #fc8181; }
+    .status-line { font-size: 0.82rem; color: #718096; margin-bottom: 16px; display: flex; align-items: center; gap: 6px; }
+    button { padding: 9px 20px; border: none; border-radius: 6px; cursor: pointer; font-size: 0.875rem; font-weight: 500; transition: all 0.15s; }
+    .btn-primary { background: #4299e1; color: white; }
+    .btn-primary:hover:not(:disabled) { background: #3182ce; }
+    .btn-danger  { background: #e53e3e; color: white; }
+    .btn-danger:hover:not(:disabled)  { background: #c53030; }
+    .btn-success { background: #38a169; color: white; }
+    .btn-success:hover:not(:disabled) { background: #2f855a; }
+    .btn-warn    { background: #d69e2e; color: white; }
+    .btn-warn:hover:not(:disabled)    { background: #b7791f; }
+    button:disabled { background: #2d3748 !important; color: #4a5568 !important; cursor: not-allowed; }
+    .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+    .audio-viz { width: 100%; height: 44px; background: #0f1117; border-radius: 6px; margin: 10px 0; display: flex; align-items: center; justify-content: center; gap: 3px; overflow: hidden; }
+    .bar { width: 4px; background: #4299e1; border-radius: 2px; height: 4px; transition: height 0.08s; }
+    .log { background: #0f1117; border: 1px solid #2d3748; border-radius: 6px; padding: 10px; font-size: 0.72rem; font-family: monospace; max-height: 160px; overflow-y: auto; margin-top: 12px; line-height: 1.5; }
+    .log .ts  { color: #4a5568; }
+    .log .err { color: #fc8181; }
+    .log .inf { color: #90cdf4; }
+    .log .wrn { color: #ecc94b; }
+    .log .ok  { color: #68d391; }
+    .info-box { background: #0f1117; border: 1px solid #2d3748; border-radius: 6px; padding: 10px 14px; font-size: 0.8rem; margin: 10px 0; }
+    .info-box label { color: #718096; font-size: 0.7rem; display: block; }
+    .info-box .val { color: #e2e8f0; font-family: monospace; }
+    .banner { display: none; align-items: flex-start; gap: 10px; padding: 12px 14px; border-radius: 8px; margin: 10px 0; font-size: 0.83rem; }
+    .banner.show { display: flex; }
+    .banner.waiting { background: #1c2f4a; border: 1px solid #4299e1; color: #90cdf4; }
+    .banner.ringing { background: #1c3a2e; border: 1px solid #38a169; color: #68d391; }
+    .ring-icon { font-size: 1.3rem; animation: ring 0.5s linear infinite alternate; }
+    @keyframes ring { from { transform: rotate(-15deg); } to { transform: rotate(15deg); } }
+    .part-list { margin-top: 8px; }
+    .part-item { display: flex; align-items: center; gap: 8px; padding: 5px 10px; background: #0f1117; border-radius: 6px; margin-bottom: 4px; font-size: 0.8rem; }
+    .part-item .pname { color: #90cdf4; }
+    .part-item .ptype { color: #718096; font-size: 0.7rem; margin-left: auto; }
+    .tts-section { margin-top: 18px; border-top: 1px solid #2d3748; padding-top: 14px; }
+    .tts-section h3 { font-size: 0.82rem; color: #718096; margin-bottom: 10px; }
+    textarea { width: 100%; background: #0f1117; border: 1px solid #2d3748; border-radius: 6px; color: #e2e8f0; padding: 8px 10px; font-size: 0.82rem; font-family: monospace; resize: vertical; min-height: 66px; }
+    textarea:focus { outline: none; border-color: #4299e1; }
+    select { background: #0f1117; border: 1px solid #2d3748; border-radius: 6px; color: #e2e8f0; padding: 6px 10px; font-size: 0.82rem; }
+    input[type=text] { background: #0f1117; border: 1px solid #2d3748; border-radius: 6px; color: #e2e8f0; padding: 7px 10px; font-size: 0.82rem; width: 100%; }
+    input[type=text]:focus { outline: none; border-color: #4299e1; }
+
+    /* ΓöÇΓöÇ Incoming call modal ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; align-items: center; justify-content: center; }
+    .modal-overlay.show { display: flex; }
+    .modal { background: #1a1f2e; border: 1px solid #38a169; border-radius: 12px; padding: 24px; width: 340px; box-shadow: 0 0 40px rgba(56,161,105,0.3); }
+    .modal h3 { color: #68d391; font-size: 1rem; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+    .modal .caller-id { font-size: 0.78rem; color: #718096; font-family: monospace; margin-bottom: 16px; }
+    .modal label { font-size: 0.78rem; color: #a0aec0; display: block; margin-bottom: 6px; }
+    .duration-btns { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
+    .dur-btn { padding: 6px 14px; font-size: 0.8rem; border-radius: 6px; border: 1px solid #2d3748; background: #0f1117; color: #a0aec0; cursor: pointer; transition: all 0.15s; }
+    .dur-btn:hover, .dur-btn.selected { background: #2d4a6e; border-color: #4299e1; color: #90cdf4; }
+    .modal-actions { display: flex; gap: 8px; margin-top: 4px; }
+
+    /* ΓöÇΓöÇ Next caller popup (bottom right) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
+    .next-caller-popup { display: none; position: fixed; bottom: 24px; right: 24px; background: #1a1f2e; border: 1px solid #38a169; border-radius: 10px; padding: 16px 20px; width: 300px; box-shadow: 0 4px 24px rgba(0,0,0,0.5); z-index: 99; }
+    .next-caller-popup.show { display: block; }
+    .next-caller-popup h4 { color: #68d391; font-size: 0.9rem; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+    .next-caller-popup p { font-size: 0.78rem; color: #a0aec0; margin-bottom: 12px; }
+
+    /* ΓöÇΓöÇ Caller message broadcast ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
+    .msg-section { margin-top: 14px; border-top: 1px solid #2d3748; padding-top: 12px; }
+    .msg-section h3 { font-size: 0.82rem; color: #718096; margin-bottom: 8px; }
+    .msg-feed { background: #0f1117; border: 1px solid #2d3748; border-radius: 6px; padding: 8px; min-height: 48px; max-height: 100px; overflow-y: auto; font-size: 0.78rem; margin-bottom: 8px; }
+    .msg-item { padding: 3px 0; border-bottom: 1px solid #1a1f2e; color: #e2e8f0; }
+    .msg-item .msg-ts { color: #4a5568; font-size: 0.68rem; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div style="width:28px;height:28px;background:#4299e1;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px">≡ƒô₧</div>
+  <h1>Helen ΓÇö Call Test</h1>
+  <span>Room: helen-room</span>
+  <div class="backend-url" id="backendLabel">backend: ΓÇª</div>
+</header>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('caller')">≡ƒô▓ Caller</div>
+  <div class="tab" onclick="switchTab('receiver')">≡ƒÄº Receiver (Helen)</div>
+</div>
+
+<!-- ΓòÉΓòÉ INCOMING CALL MODAL ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ -->
+<div class="modal-overlay" id="incoming-modal">
+  <div class="modal">
+    <h3><span class="ring-icon">≡ƒöö</span> Incoming Call</h3>
+    <div class="caller-id" id="modal-caller-id">caller-xxx</div>
+
+    <label>How long do you need to finish current call?</label>
+    <div class="duration-btns">
+      <div class="dur-btn selected" data-sec="120" onclick="selectDuration(this,120)">2 min</div>
+      <div class="dur-btn" data-sec="300" onclick="selectDuration(this,300)">5 min</div>
+      <div class="dur-btn" data-sec="600" onclick="selectDuration(this,600)">10 min</div>
+      <div class="dur-btn" data-sec="900" onclick="selectDuration(this,900)">15 min</div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-success" style="flex:1" onclick="modalPickUp()">Γ£à Pick Up</button>
+      <button class="btn-warn"    style="flex:1" onclick="modalHold()">ΓÅ╕ Hold</button>
+      <button class="btn-danger"  style="flex:1" onclick="modalDecline()">Γ¥î Decline</button>
+    </div>
+  </div>
+</div>
+
+<!-- ΓòÉΓòÉ NEXT CALLER POPUP ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ -->
+<div class="next-caller-popup" id="next-caller-popup">
+  <h4><span class="ring-icon">≡ƒöö</span> Next caller waiting</h4>
+  <p id="next-caller-info">A caller is in the queue</p>
+  <div class="btn-row">
+    <button class="btn-success" style="flex:1;padding:7px" onclick="pickNextCaller()">Γ£à Pick Up</button>
+    <button class="btn-danger"  style="flex:1;padding:7px" onclick="dismissNextCaller()">Γ£ù Dismiss</button>
+  </div>
+</div>
+
+<!-- ΓòÉΓòÉ CALLER TAB ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ -->
+<div id="tab-caller" class="panel active">
+  <div class="card">
+    <h2>Call Helen</h2>
+    <div class="status-line">
+      <span class="status-dot" id="c-dot"></span>
+      <span id="c-status">Idle</span>
+    </div>
+
+    <div class="banner waiting" id="c-queue-banner">
+      <span>ΓÅ│</span><span id="c-queue-msg">ConnectingΓÇª</span>
+    </div>
+
+    <div class="info-box">
+      <label>Room</label><span class="val">helen-room</span>
+      <label>Session</label><span class="val" id="c-session">ΓÇö</span>
+      <label>Participants</label><span class="val" id="c-parts">0</span>
+    </div>
+
+    <div class="audio-viz" id="c-viz"></div>
+    <div class="part-list" id="c-part-list"></div>
+
+    <div class="btn-row">
+      <button class="btn-success" id="c-call-btn" onclick="callerCall()">≡ƒô₧ Call Helen</button>
+      <button class="btn-danger"  id="c-hang-btn" onclick="callerHangup()" disabled>≡ƒö┤ Hang up</button>
+      <button class="btn-primary" id="c-mute-btn" onclick="callerMute()" disabled style="background:#2d3748;color:#a0aec0">≡ƒÄñ Mute</button>
+    </div>
+
+    <div class="log" id="c-log"></div>
+  </div>
+</div>
+
+<!-- ΓòÉΓòÉ RECEIVER TAB ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ -->
+<div id="tab-receiver" class="panel">
+  <div class="card">
+    <h2>Receiver ΓÇö You are Helen</h2>
+    <div class="status-line">
+      <span class="status-dot" id="r-dot"></span>
+      <span id="r-status">Offline</span>
+    </div>
+
+    <!-- Active call info -->
+    <div class="banner ringing" id="r-active-banner" style="display:none;background:#1c2f4a;border-color:#4299e1;color:#90cdf4">
+      <span>≡ƒô₧</span>
+      <div style="flex:1">
+        <strong id="r-active-caller">ΓÇö</strong>
+        <div style="font-size:0.72rem;color:#718096;margin-top:2px">Time left: <span id="r-timer">ΓÇö</span></div>
+      </div>
+      <button class="btn-danger" style="padding:5px 12px;font-size:0.78rem" onclick="recvHangupActive()">End</button>
+    </div>
+
+    <div class="audio-viz" id="r-viz"></div>
+
+    <div class="info-box">
+      <label>Room</label><span class="val">helen-room</span>
+      <label>In queue</label><span class="val" id="r-queue-count">0</span>
+      <label>Participants</label><span class="val" id="r-parts">0</span>
+    </div>
+
+    <div class="part-list" id="r-part-list"></div>
+
+    <div class="btn-row">
+      <button class="btn-primary" id="r-join-btn"   onclick="recvJoin()">≡ƒÄº Go Online</button>
+      <button class="btn-danger"  id="r-leave-btn"  onclick="recvLeave()" disabled>≡ƒö┤ Go Offline</button>
+      <button class="btn-primary" id="r-mute-btn"   onclick="recvMute()"  disabled style="background:#2d3748;color:#a0aec0">≡ƒÄñ Mute</button>
+      <button class="btn-warn"    id="r-conf-btn"   onclick="recvConference()" disabled style="display:none">≡ƒæÑ Conference</button>
+      <button class="btn-danger"  id="r-hangup-btn" onclick="recvHangupActive()" disabled style="display:none">≡ƒô┤ End Call</button>
+    </div>
+
+    <!-- Waiting callers list (shown when in active call and others are queued) -->
+    <div id="r-waiting-list" style="display:none;margin-top:12px;border-top:1px solid #2d3748;padding-top:10px">
+      <div style="font-size:0.78rem;color:#718096;margin-bottom:6px">ΓÅ│ Waiting callers</div>
+      <div id="r-waiting-items"></div>
+    </div>
+
+    <!-- Message to caller -->
+    <div class="msg-section">
+      <h3>≡ƒÆ¼ Send message to caller (shows on their screen)</h3>
+      <div class="msg-feed" id="r-msg-feed"></div>
+      <div style="display:flex;gap:8px;margin-top:6px">
+        <input type="text" id="r-msg-input" placeholder="Type a messageΓÇª" onkeydown="if(event.key==='Enter')recvSendMsg()" />
+        <button class="btn-primary" style="white-space:nowrap;padding:7px 14px" onclick="recvSendMsg()">Send</button>
+      </div>
+    </div>
+
+    <!-- TTS Section -->
+    <div class="tts-section">
+      <h3>≡ƒöè Piper TTS ΓÇö speak as Helen</h3>
+      <textarea id="tts-text" placeholder="Type what Helen should sayΓÇª"></textarea>
+      <div class="btn-row" style="margin-top:8px">
+        <select id="tts-voice">
+          <option value="en_US-ryan-high">Ryan High (en_US)</option>
+          <option value="en_US-lessac-medium">Lessac (en_US)</option>
+          <option value="en_US-ryan-medium">Ryan Medium (en_US)</option>
+        </select>
+        <button class="btn-primary" id="tts-btn" onclick="ttsPiper()" disabled>≡ƒùú∩╕Å Speak (Piper)</button>
+        <button class="btn-success" onclick="ttsBrowser()">≡ƒöë Browser TTS</button>
+      </div>
+    </div>
+
+    <div class="log" id="r-log"></div>
+  </div>
+</div>
+
+<!-- Message display on caller side -->
+<div id="c-msg-banner" style="display:none;position:fixed;top:60px;left:50%;transform:translateX(-50%);background:#1a1f2e;border:1px solid #4299e1;border-radius:8px;padding:12px 20px;font-size:0.9rem;color:#90cdf4;z-index:50;max-width:400px;text-align:center"></div>
+
+<audio id="c-audio" autoplay playsinline></audio>
+<audio id="r-audio" autoplay playsinline></audio>
+
+<script src="https://cdn.jsdelivr.net/npm/livekit-client@2.5.7/dist/livekit-client.umd.min.js"></script>
+<script>
+// ΓöÇΓöÇ Config ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+const API = (() => {
+  const h = window.location.hostname;
+  if (h === 'localhost' || h === '127.0.0.1') return `http://${h}:8000`;
+  return 'https://bairnly-unvamped-billye.ngrok-free.dev';
+})();
+const LK_URL = 'wss://sch-natyyy4y.livekit.cloud';
+document.getElementById('backendLabel').textContent = 'backend: ' + API;
+
+const HEADERS = { 'ngrok-skip-browser-warning': '1' };
+
+window.onerror = (msg, src, line) => {
+  document.querySelectorAll('.log').forEach(el => {
+    const d = document.createElement('div');
+    d.innerHTML = `<span class="err">[JS ERROR] ${msg} (${line})</span>`;
+    el.appendChild(d);
+  });
+};
+
+// ΓöÇΓöÇ Tabs ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach((t,i) =>
+    t.classList.toggle('active',(i===0&&name==='caller')||(i===1&&name==='receiver')));
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+}
+
+// ΓöÇΓöÇ Logging ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+function log(id, msg, cls='ok') {
+  const el = document.getElementById(id);
+  const d = document.createElement('div');
+  d.innerHTML = `<span class="ts">[${new Date().toLocaleTimeString()}]</span> <span class="${cls}">${msg}</span>`;
+  el.appendChild(d); el.scrollTop = el.scrollHeight;
+}
+
+// ΓöÇΓöÇ Audio viz ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+const _vt = {};
+function startViz(id) {
+  const el = document.getElementById(id);
+  el.innerHTML = Array.from({length:14},()=>'<div class="bar"></div>').join('');
+  const bars = el.querySelectorAll('.bar');
+  _vt[id] = setInterval(()=>bars.forEach(b=>b.style.height=(Math.random()*36+4)+'px'),80);
+}
+function stopViz(id) {
+  clearInterval(_vt[id]);
+  document.getElementById(id).querySelectorAll('.bar').forEach(b=>b.style.height='4px');
+}
+
+// ΓöÇΓöÇ TTS helpers ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+// Pick the best available browser voice (natural > robotic)
+let _bestVoice = null;
+function _getBestVoice(){
+  if (_bestVoice) return _bestVoice;
+  const voices = window.speechSynthesis.getVoices();
+  // Preference order: natural/neural voices first
+  const preferred = [
+    'Google US English',
+    'Google UK English Female',
+    'Microsoft Aria Online (Natural)',
+    'Microsoft Jenny Online (Natural)',
+    'Microsoft Guy Online (Natural)',
+    'Microsoft Zira Desktop',
+    'Samantha',        // macOS
+    'Karen',           // macOS
+    'Daniel',          // macOS
+  ];
+  for (const name of preferred) {
+    const v = voices.find(v => v.name === name);
+    if (v) { _bestVoice = v; return v; }
+  }
+  // Fallback: first English voice
+  _bestVoice = voices.find(v => v.lang.startsWith('en')) || voices[0] || null;
+  return _bestVoice;
+}
+// Voices load async ΓÇö reset cache when they change
+window.speechSynthesis.onvoiceschanged = () => { _bestVoice = null; };
+
+async function _speakText(text) {
+  // Try Piper TTS first (best quality, runs on your backend)
+  try {
+    const res = await fetch(`${API}/tts/speak`, {
+      method:'POST',
+      headers:{...HEADERS,'Content-Type':'application/json'},
+      body: JSON.stringify({text, voice:'en_US-ryan-high'}),
+    });
+    if (!res.ok) throw new Error(`${res.status}`);
+    const blob = await res.blob();
+    const audio = new Audio(URL.createObjectURL(blob));
+    await audio.play();
+    return;
+  } catch(e) {
+    // Piper unavailable ΓÇö fall through to browser TTS
+  }
+  // Browser TTS fallback with best available voice
+  window.speechSynthesis.cancel(); // stop any ongoing speech first
+  const u = new SpeechSynthesisUtterance(text);
+  const v = _getBestVoice();
+  if (v) u.voice = v;
+  u.rate  = 0.88;   // slightly slower = more natural
+  u.pitch = 1.0;
+  u.volume = 1.0;
+  window.speechSynthesis.speak(u);
+}
+
+// ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+// CALLER
+// ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+let cRoom=null, cMuted=false, cSessionId=null, _cdi=null, _cai=null, _cSec=0;
+
+function cStatus(msg,color) {
+  document.getElementById('c-status').textContent=msg;
+  document.getElementById('c-dot').className='status-dot '+(color||'');
+}
+
+// Visual countdown in the queue banner
+function _startCountdown(sec) {
+  _cSec = sec;
+  document.getElementById('c-queue-banner').classList.add('show');
+  _cdi = setInterval(()=>{
+    _cSec--;
+    if (_cSec<=0){ _stopCountdown(); document.getElementById('c-queue-msg').textContent='Connecting you nowΓÇª'; return; }
+    document.getElementById('c-queue-msg').textContent=`Helen is busy. Wait time: ${_cSec}s`;
+  },1000);
+}
+
+// Stop ALL caller-side timers and TTS loop
+function _stopCountdown(){
+  clearInterval(_cdi); _cdi=null;
+  clearInterval(_cai); _cai=null;
+}
+
+// Play TTS announcements every 10s on caller's browser while waiting
+async function _playWaitAnnouncement(msg, totalWait) {
+  await _speakText(msg);
+  let rem = totalWait;
+  _cai = setInterval(async()=>{
+    // If we've been connected (no longer waiting), stop
+    if(!_cai) return;
+    rem -= 10;
+    if (rem<=0){ clearInterval(_cai); _cai=null; await _speakText('You are next. Connecting you to Helen now.'); return; }
+    await _speakText(`Please hold. Your wait time is approximately ${rem} seconds.`);
+  },10000);
+}
+
+async function callerCall() {
+  cStatus('Getting tokenΓÇª','yellow');
+  log('c-log','Requesting caller tokenΓÇª','inf');
+  let data;
+  try {
+    const res = await fetch(`${API}/livekit/caller-token`, {headers: HEADERS});
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+    data = await res.json();
+  } catch(e) { log('c-log','Token error: '+e.message,'err'); cStatus('Error','red'); return; }
+
+  cSessionId = data.session_id;
+  document.getElementById('c-session').textContent = (data.session_id||'').slice(0,12)+'ΓÇª';
+
+  if (data.wait_seconds > 0) {
+    document.getElementById('c-queue-msg').textContent = data.wait_message;
+    log('c-log','ΓÅ│ '+data.wait_message,'wrn');
+    _startCountdown(data.wait_seconds);
+    // Only start TTS loop BEFORE connecting ΓÇö will be stopped on RoomEvent.Connected
+    _playWaitAnnouncement(data.wait_message, data.wait_seconds);
+  } else {
+    document.getElementById('c-queue-banner').classList.remove('show');
+    log('c-log','Queue pos: 1 ΓÇö connecting now','inf');
+  }
+  await _connectCaller(data.token);
+}
+
+async function _connectCaller(token) {
+  if (cRoom) { await cRoom.disconnect(); cRoom=null; }
+  const {Room,RoomEvent,Track} = LivekitClient;
+  cRoom = new Room({adaptiveStream:true,dynacast:true});
+
+  cRoom.on(RoomEvent.Connected, async()=>{
+    log('c-log','Γ£ô Connected to helen-room','inf');
+    cStatus('In call','green');
+    document.getElementById('c-call-btn').disabled=true;
+    document.getElementById('c-hang-btn').disabled=false;
+    document.getElementById('c-mute-btn').disabled=false;
+    document.getElementById('c-queue-banner').classList.remove('show');
+    // Γÿà STOP all wait TTS/countdown as soon as we are in the room
+    _stopCountdown();
+    startViz('c-viz');
+    try { await cRoom.localParticipant.setMicrophoneEnabled(true); log('c-log','≡ƒÄñ Mic on'); }
+    catch(e) { log('c-log','Mic denied: '+e.message,'wrn'); }
+    _updateCParts();
+  });
+
+  cRoom.on(RoomEvent.Disconnected,()=>{
+    cStatus('Disconnected','red');
+    document.getElementById('c-call-btn').disabled=false;
+    document.getElementById('c-hang-btn').disabled=true;
+    document.getElementById('c-mute-btn').disabled=true;
+    document.getElementById('c-queue-banner').classList.remove('show');
+    stopViz('c-viz'); _stopCountdown(); _updateCParts();
+    if (cSessionId) { fetch(`${API}/livekit/caller-queue/${cSessionId}`,{method:'DELETE',headers:HEADERS}).catch(()=>{}); cSessionId=null; }
+  });
+
+  cRoom.on(RoomEvent.ParticipantConnected, p=>{ log('c-log',`≡ƒæñ ${p.identity} joined`,'inf'); _updateCParts(); });
+  cRoom.on(RoomEvent.ParticipantDisconnected, p=>{ log('c-log',`≡ƒæñ ${p.identity} left`,'wrn'); _updateCParts(); });
+
+  cRoom.on(RoomEvent.TrackSubscribed,(track,pub,participant)=>{
+    if (track.kind===LivekitClient.Track.Kind.Audio)
+      track.attach(document.getElementById('c-audio'));
+  });
+
+  // Listen for data messages from receiver (Helen)
+  cRoom.on(RoomEvent.DataReceived,(payload,participant)=>{
+    try {
+      const msg = JSON.parse(new TextDecoder().decode(payload));
+      if (msg.type==='message') {
+        const banner = document.getElementById('c-msg-banner');
+        banner.textContent = '≡ƒÆ¼ Helen: ' + msg.text;
+        banner.style.display='block';
+        setTimeout(()=>banner.style.display='none', 6000);
+        log('c-log','≡ƒÆ¼ Helen says: '+msg.text,'inf');
+      } else if (msg.type==='stop_tts') {
+        // Helen picked up this caller ΓÇö stop any remaining TTS loop
+        _stopCountdown();
+        document.getElementById('c-queue-banner').classList.remove('show');
+      } else if (msg.type==='wait_update') {
+        // Helen is still busy, update countdown with new time
+        if (_cai || _cdi) {
+          _cSec = msg.seconds;
+          document.getElementById('c-queue-msg').textContent=`Helen is busy. Wait time: ${msg.seconds}s`;
+          _speakText(`Updated wait time: approximately ${msg.seconds} seconds.`);
+        }
+      }
+    } catch(e){}
+  });
+
+  try { await cRoom.connect(LK_URL, token); }
+  catch(e) { log('c-log','Connect failed: '+e.message,'err'); cStatus('Failed','red'); }
+}
+
+function _updateCParts() {
+  if (!cRoom) return;
+  const parts=[...cRoom.remoteParticipants.values()];
+  document.getElementById('c-parts').textContent=parts.length;
+  document.getElementById('c-part-list').innerHTML=parts.map(p=>`
+    <div class="part-item">
+      <span class="status-dot green"></span>
+      <span class="pname">${p.identity}</span>
+      <span class="ptype">${p.identity.startsWith('helen')?'Helen (receiver)':'Participant'}</span>
+    </div>`).join('');
+}
+
+function callerMute(){
+  if(!cRoom)return; cMuted=!cMuted;
+  cRoom.localParticipant.setMicrophoneEnabled(!cMuted);
+  const b=document.getElementById('c-mute-btn');
+  b.textContent=cMuted?'≡ƒöç Unmute':'≡ƒÄñ Mute';
+  b.style.background=cMuted?'#744210':'#2d3748';
+}
+
+async function callerHangup(){
+  _stopCountdown();
+  if(cSessionId){fetch(`${API}/livekit/caller-queue/${cSessionId}`,{method:'DELETE',headers:HEADERS}).catch(()=>{}); cSessionId=null;}
+  if(cRoom){await cRoom.disconnect(); cRoom=null;}
+  cStatus('Hung up','');
+  document.getElementById('c-call-btn').disabled=false;
+  document.getElementById('c-hang-btn').disabled=true;
+  document.getElementById('c-mute-btn').disabled=true;
+  document.getElementById('c-queue-banner').classList.remove('show');
+  log('c-log','≡ƒô┤ Hung up','wrn'); stopViz('c-viz');
+}
+
+// ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+// RECEIVER (Helen)
+// ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+let rRoom=null, rMuted=false;
+let _activeCallerIdentity=null;
+let _callTimerInterval=null;
+let _callTimerRemaining=0;
+let _pendingIncomingIdentity=null;
+let _selectedDuration=120;
+let _queuePollInterval=null;
+let _inConference=false;
+// Track callers waiting in room but not yet picked up
+const _waitingCallers = new Map(); // identity ΓåÆ session_id (unknown, just track identity)
+
+function rStatus(msg,color){
+  document.getElementById('r-status').textContent=msg;
+  document.getElementById('r-dot').className='status-dot '+(color||'');
+}
+
+// ΓöÇΓöÇ Duration selector in modal ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+function selectDuration(el, sec){
+  document.querySelectorAll('.dur-btn').forEach(b=>b.classList.remove('selected'));
+  el.classList.add('selected');
+  _selectedDuration = sec;
+}
+
+// ΓöÇΓöÇ Incoming call modal ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+function _showIncomingModal(callerIdentity){
+  _pendingIncomingIdentity = callerIdentity;
+  document.getElementById('modal-caller-id').textContent = callerIdentity;
+  document.querySelectorAll('.dur-btn').forEach(b=>b.classList.remove('selected'));
+  document.querySelector('.dur-btn[data-sec="120"]').classList.add('selected');
+  _selectedDuration = 120;
+  document.getElementById('incoming-modal').classList.add('show');
+  _speakText('Incoming call from ' + callerIdentity.replace(/caller-/g,'').replace(/-\w+$/,'').slice(0,10));
+}
+
+function modalPickUp(){
+  document.getElementById('incoming-modal').classList.remove('show');
+  const identity = _pendingIncomingIdentity;
+  _pendingIncomingIdentity = null;
+
+  // If already in a call, end it first (switch call)
+  if (_activeCallerIdentity && _activeCallerIdentity !== identity) {
+    clearInterval(_callTimerInterval);
+    _waitingCallers.delete(_activeCallerIdentity);
+  }
+
+  _activeCallerIdentity = identity;
+  _waitingCallers.delete(identity);
+  _startCallTimer(_selectedDuration);
+
+  // Γÿà Tell this caller to stop their TTS wait loop
+  _sendDataToRoom({type:'stop_tts', identity});
+
+  // Γÿà Tell remaining waiters their updated wait time
+  _notifyWaiters(_selectedDuration);
+
+  // Remove from backend queue (they are now active, not queued)
+  fetch(`${API}/livekit/queue-info`,{headers:HEADERS})
+    .then(r=>r.json())
+    .then(d=>{
+      // We don't know their session_id from here, but we can refresh queue count
+      document.getElementById('r-queue-count').textContent = Math.max(0,(d.queue_depth||1)-1);
+    }).catch(()=>{});
+
+  log('r-log',`Γ£à Picked up ${identity} ΓÇö ${_selectedDuration}s`,'ok');
+  rStatus('In call','green');
+  document.getElementById('r-active-banner').style.display='flex';
+  document.getElementById('r-active-caller').textContent = identity;
+  document.getElementById('r-conf-btn').style.display='inline-block';
+  document.getElementById('r-conf-btn').disabled=false;
+  document.getElementById('r-hangup-btn').style.display='inline-block';
+  document.getElementById('r-hangup-btn').disabled=false;
+  _updateRParts();
+  _updateWaitingList();
+}
+
+function modalHold(){
+  document.getElementById('incoming-modal').classList.remove('show');
+  if(_pendingIncomingIdentity) _waitingCallers.set(_pendingIncomingIdentity, true);
+  _pendingIncomingIdentity = null;
+  _speakText('Please hold. Helen will be with you shortly.');
+  log('r-log','ΓÅ╕ Caller placed on hold','wrn');
+  _updateWaitingList();
+}
+
+function modalDecline(){
+  document.getElementById('incoming-modal').classList.remove('show');
+  _pendingIncomingIdentity = null;
+  _sendDataToRoom({type:'message', text:'Helen is unavailable right now. Please try again later.', from:'Helen', ts:Date.now()});
+  log('r-log','Γ¥î Call declined','wrn');
+}
+
+// ΓöÇΓöÇ Call timer ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+function _startCallTimer(sec){
+  clearInterval(_callTimerInterval);
+  _callTimerRemaining = sec;
+  _updateTimerDisplay();
+  _callTimerInterval = setInterval(()=>{
+    _callTimerRemaining--;
+    _updateTimerDisplay();
+    if (_callTimerRemaining<=0){
+      clearInterval(_callTimerInterval);
+      log('r-log','ΓÅ░ Call time limit reached','wrn');
+      _sendDataToRoom({type:'message', text:'Your call time is up. Thank you for calling.', from:'Helen', ts:Date.now()});
+    }
+  },1000);
+}
+
+function _updateTimerDisplay(){
+  const m = Math.floor(_callTimerRemaining/60);
+  const s = _callTimerRemaining%60;
+  document.getElementById('r-timer').textContent = `${m}:${s.toString().padStart(2,'0')}`;
+}
+
+// Γÿà Send a LiveKit data message to all room participants
+function _sendDataToRoom(obj){
+  if(!rRoom) return;
+  try{
+    rRoom.localParticipant.publishData(new TextEncoder().encode(JSON.stringify(obj)),{reliable:true});
+  }catch(e){}
+}
+
+// Γÿà Tell all waiting callers their updated estimated wait time
+function _notifyWaiters(activeSec){
+  if(!rRoom) return;
+  let pos = 1;
+  _waitingCallers.forEach((v,identity)=>{
+    const waitSec = pos * activeSec;
+    _sendDataToRoom({type:'wait_update', seconds: waitSec, for_identity: identity});
+    pos++;
+  });
+}
+
+// ΓöÇΓöÇ Waiting callers list ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+// Per-caller wait time selection (stored separately from _selectedDuration)
+const _waitingDuration = new Map(); // identity ΓåÆ seconds
+
+function _updateWaitingList(){
+  const container = document.getElementById('r-waiting-list');
+  const items = document.getElementById('r-waiting-items');
+  if(_waitingCallers.size===0){
+    container.style.display='none'; return;
+  }
+  container.style.display='block';
+  items.innerHTML=[..._waitingCallers.keys()].map((id)=>{
+    const dur = _waitingDuration.get(id) || 120;
+    const opts = [
+      {sec:60,  label:'1 min'},
+      {sec:120, label:'2 min'},
+      {sec:300, label:'5 min'},
+      {sec:600, label:'10 min'},
+    ].map(o=>`<span class="dur-btn${dur===o.sec?' selected':''}" style="padding:3px 8px;font-size:0.7rem" onclick="_setWaitDur('${id}',${o.sec},this)">${o.label}</span>`).join('');
+    return `
+      <div style="background:#0f1117;border:1px solid #2d3748;border-radius:8px;padding:8px 10px;margin-bottom:6px">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+          <span class="status-dot yellow"></span>
+          <span style="flex:1;font-size:0.8rem;color:#90cdf4">${id}</span>
+          <button class="btn-success" style="padding:3px 10px;font-size:0.75rem" onclick="_pickWaiting('${id}')">Pick Up</button>
+          <button class="btn-danger"  style="padding:3px 8px;font-size:0.75rem;margin-left:3px" onclick="_dismissWaiting('${id}')">Γ£ù</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <span style="font-size:0.7rem;color:#718096">Wait time:</span>
+          <div class="duration-btns" style="margin:0;gap:4px">${opts}</div>
+          <button class="btn-primary" style="padding:3px 8px;font-size:0.7rem" onclick="_sendWaitTts('${id}')">≡ƒöè Tell them</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function _setWaitDur(identity, sec, el){
+  _waitingDuration.set(identity, sec);
+  // Update selected state only within this caller's block
+  el.closest('.duration-btns').querySelectorAll('.dur-btn').forEach(b=>b.classList.remove('selected'));
+  el.classList.add('selected');
+}
+
+async function _sendWaitTts(identity){
+  const sec = _waitingDuration.get(identity) || 120;
+  const min = Math.round(sec/60);
+  const msg = `Please hold. Helen will be with you in approximately ${min} minute${min!==1?'s':''}.`;
+  // Send as a visible message banner on caller's screen
+  _sendDataToRoom({type:'message', text: msg, from:'Helen', ts: Date.now()});
+  // Speak it via Piper/TTS so the waiting caller actually hears it
+  await _speakText(msg);
+  log('r-log',`≡ƒöè Told ${identity}: ~${min} min wait`,'inf');
+}
+
+function _pickWaiting(identity){
+  // Pre-fill modal with this caller's selected wait duration
+  if(_waitingDuration.has(identity)) _selectedDuration = _waitingDuration.get(identity);
+  _showIncomingModal(identity);
+}
+
+function _dismissWaiting(identity){
+  _waitingCallers.delete(identity);
+  _updateWaitingList();
+  _sendDataToRoom({type:'message', text:'Helen is currently busy. Please try again later.', from:'Helen', ts:Date.now()});
+}
+
+// ΓöÇΓöÇ Active call end ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+function recvHangupActive(){
+  clearInterval(_callTimerInterval);
+  _activeCallerIdentity = null;
+  _inConference = false;
+  document.getElementById('r-active-banner').style.display='none';
+  document.getElementById('r-conf-btn').style.display='none';
+  document.getElementById('r-hangup-btn').style.display='none';
+  document.getElementById('r-hangup-btn').disabled=true;
+  rStatus('Online ΓÇö waiting','green');
+  log('r-log','≡ƒô┤ Ended current call','wrn');
+  _updateWaitingList();
+  // If there are waiting callers in room, show popup/modal for next one
+  if(_waitingCallers.size>0){
+    const next = [..._waitingCallers.keys()][0];
+    _showIncomingModal(next);
+  } else {
+    _checkNextCaller();
+  }
+}
+
+function _checkNextCaller(){
+  // Check room participants who aren't Helen and aren't active
+  if(rRoom){
+    const waiters=[...rRoom.remoteParticipants.values()]
+      .filter(p=>!p.identity.startsWith('helen') && p.identity!==_activeCallerIdentity);
+    if(waiters.length>0){
+      const popup = document.getElementById('next-caller-popup');
+      document.getElementById('next-caller-info').textContent=`${waiters.length} caller(s) waiting. Pick up next?`;
+      popup.classList.add('show');
+      _speakText(`You have ${waiters.length} caller waiting. Pick up?`);
+      return;
+    }
+  }
+  // Fallback: check backend queue
+  fetch(`${API}/livekit/queue-info`,{headers:HEADERS})
+    .then(r=>r.json())
+    .then(d=>{
+      if(d.queue_depth>0){
+        const popup = document.getElementById('next-caller-popup');
+        document.getElementById('next-caller-info').textContent=`${d.queue_depth} caller(s) waiting. Pick up next?`;
+        popup.classList.add('show');
+        _speakText(`You have ${d.queue_depth} caller waiting. Pick up?`);
+      }
+    }).catch(()=>{});
+}
+
+function pickNextCaller(){
+  document.getElementById('next-caller-popup').classList.remove('show');
+  if(rRoom){
+    const parts=[...rRoom.remoteParticipants.values()]
+      .filter(p=>!p.identity.startsWith('helen') && p.identity!==_activeCallerIdentity);
+    if(parts.length>0) _showIncomingModal(parts[0].identity);
+  }
+}
+
+function dismissNextCaller(){
+  document.getElementById('next-caller-popup').classList.remove('show');
+}
+
+// ΓöÇΓöÇ Conference ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+function recvConference(){
+  _inConference = !_inConference;
+  const btn = document.getElementById('r-conf-btn');
+  btn.textContent = _inConference ? '≡ƒöÇ Exit Conference' : '≡ƒæÑ Conference';
+  btn.style.background = _inConference ? '#744210' : '';
+  log('r-log', _inConference ? '≡ƒæÑ Conference mode ON' : '≡ƒæÑ Conference OFF','inf');
+}
+
+// ΓöÇΓöÇ Join ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+async function recvJoin(){
+  rStatus('Getting tokenΓÇª','yellow');
+  log('r-log','Requesting receiver tokenΓÇª','inf');
+  let data;
+  try {
+    const res = await fetch(`${API}/livekit/receiver-token?identity=helen-receiver&name=Helen`,{headers:HEADERS});
+    if(!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+    data = await res.json();
+  } catch(e){ log('r-log','Token error: '+e.message,'err'); rStatus('Error','red'); return; }
+
+  log('r-log','Token ok ΓÇö joining helen-room','inf');
+  await _connectReceiver(data.token);
+}
+
+async function _connectReceiver(token){
+  if(rRoom){await rRoom.disconnect(); rRoom=null;}
+  const {Room,RoomEvent,Track} = LivekitClient;
+  rRoom = new Room({adaptiveStream:true,dynacast:true});
+
+  rRoom.on(RoomEvent.Connected,async()=>{
+    log('r-log','Γ£ô Online ΓÇö waiting for callers','inf');
+    rStatus('Online ΓÇö waiting','green');
+    document.getElementById('r-join-btn').disabled=true;
+    document.getElementById('r-leave-btn').disabled=false;
+    document.getElementById('r-mute-btn').disabled=false;
+    document.getElementById('tts-btn').disabled=false;
+    startViz('r-viz');
+    try{ await rRoom.localParticipant.setMicrophoneEnabled(true); log('r-log','≡ƒÄñ Mic on'); }
+    catch(e){ log('r-log','Mic denied: '+e.message,'wrn'); }
+    _updateRParts();
+    _queuePollInterval = setInterval(_pollQueue,5000);
+  });
+
+  rRoom.on(RoomEvent.Disconnected,()=>{
+    rStatus('Offline','');
+    document.getElementById('r-join-btn').disabled=false;
+    document.getElementById('r-leave-btn').disabled=true;
+    document.getElementById('r-mute-btn').disabled=true;
+    document.getElementById('tts-btn').disabled=true;
+    document.getElementById('r-active-banner').style.display='none';
+    document.getElementById('r-conf-btn').style.display='none';
+    document.getElementById('r-hangup-btn').style.display='none';
+    document.getElementById('r-hangup-btn').disabled=true;
+    stopViz('r-viz'); clearInterval(_queuePollInterval); _updateRParts();
+    clearInterval(_callTimerInterval);
+    _waitingCallers.clear(); _updateWaitingList();
+  });
+
+  rRoom.on(RoomEvent.ParticipantConnected, p=>{
+    if(p.identity.startsWith('helen')||p.identity.startsWith('piper')) return;
+    log('r-log',`≡ƒô▓ Caller joined: ${p.identity}`,'inf');
+    _updateRParts();
+
+    if(!_activeCallerIdentity || _inConference){
+      // No active call (or conference mode) ΓÇö show incoming modal immediately
+      _showIncomingModal(p.identity);
+    } else {
+      // Already on a call ΓÇö add to waiting list and notify caller to hold
+      _waitingCallers.set(p.identity, true);
+      _updateWaitingList();
+      // Tell this new caller they are waiting
+      const waitSec = _callTimerRemaining > 0 ? _callTimerRemaining : _selectedDuration;
+      _sendDataToRoom({type:'wait_update', seconds: waitSec, for_identity: p.identity});
+      log('r-log',`ΓÅ│ ${p.identity} added to waiting list`,'wrn');
+      _speakText('New caller waiting.');
+    }
+  });
+
+  rRoom.on(RoomEvent.ParticipantDisconnected,p=>{
+    log('r-log',`≡ƒô┤ ${p.identity} left`,'wrn');
+    _waitingCallers.delete(p.identity);
+    if(p.identity === _activeCallerIdentity){
+      clearInterval(_callTimerInterval);
+      _activeCallerIdentity=null;
+      document.getElementById('r-active-banner').style.display='none';
+      document.getElementById('r-conf-btn').style.display='none';
+      rStatus('Online ΓÇö waiting','green');
+      log('r-log','Active caller left ΓÇö checking queueΓÇª','inf');
+      _updateWaitingList();
+      setTimeout(()=>{
+        if(_waitingCallers.size>0){
+          const next=[..._waitingCallers.keys()][0];
+          _showIncomingModal(next);
+        } else {
+          _checkNextCaller();
+        }
+      },800);
+    }
+    _updateRParts();
+  });
+
+  rRoom.on(RoomEvent.TrackSubscribed,(track,pub,participant)=>{
+    if(track.kind===LivekitClient.Track.Kind.Audio)
+      track.attach(document.getElementById('r-audio'));
+  });
+
+  try{ await rRoom.connect(LK_URL,token); }
+  catch(e){ log('r-log','Connect failed: '+e.message,'err'); rStatus('Failed','red'); }
+}
+
+function _updateRParts(){
+  if(!rRoom)return;
+  const parts=[...rRoom.remoteParticipants.values()]
+    .filter(p=>!p.identity.startsWith('helen')&&!p.identity.startsWith('piper'));
+  document.getElementById('r-parts').textContent=parts.length;
+  document.getElementById('r-part-list').innerHTML=parts.map(p=>`
+    <div class="part-item">
+      <span class="status-dot ${p.identity===_activeCallerIdentity?'green':'yellow'}"></span>
+      <span class="pname">${p.identity}</span>
+      <span class="ptype">${p.identity===_activeCallerIdentity?'Active call':'Waiting'}</span>
+    </div>`).join('');
+}
+
+async function _pollQueue(){
+  try{
+    const res = await fetch(`${API}/livekit/queue-info`,{headers:HEADERS});
+    const d = await res.json();
+    // Show actual waiting count from room (more accurate than backend queue)
+    const roomWaiters = rRoom ? [...rRoom.remoteParticipants.values()]
+      .filter(p=>!p.identity.startsWith('helen')&&!p.identity.startsWith('piper')&&p.identity!==_activeCallerIdentity).length : 0;
+    document.getElementById('r-queue-count').textContent = roomWaiters;
+  }catch(e){}
+}
+
+function recvMute(){
+  if(!rRoom)return; rMuted=!rMuted;
+  rRoom.localParticipant.setMicrophoneEnabled(!rMuted);
+  const b=document.getElementById('r-mute-btn');
+  b.textContent=rMuted?'≡ƒöç Unmute':'≡ƒÄñ Mute';
+  b.style.background=rMuted?'#744210':'#2d3748';
+}
+
+async function recvLeave(){
+  clearInterval(_queuePollInterval); clearInterval(_callTimerInterval);
+  if(rRoom){await rRoom.disconnect(); rRoom=null;}
+  rStatus('Offline',''); _activeCallerIdentity=null;
+  _waitingCallers.clear();
+  document.getElementById('r-join-btn').disabled=false;
+  document.getElementById('r-leave-btn').disabled=true;
+  document.getElementById('tts-btn').disabled=true;
+  document.getElementById('r-active-banner').style.display='none';
+  stopViz('r-viz'); log('r-log','Left room','wrn');
+  _updateWaitingList();
+}
+
+// ΓöÇΓöÇ Send message to caller ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+async function recvSendMsg(){
+  const text = document.getElementById('r-msg-input').value.trim();
+  if(!text||!rRoom) return;
+  _sendDataToRoom({type:'message', text, from:'Helen', ts: Date.now()});
+  document.getElementById('r-msg-input').value='';
+  const feed = document.getElementById('r-msg-feed');
+  const d = document.createElement('div');
+  d.className='msg-item';
+  d.innerHTML=`<span class="msg-ts">${new Date().toLocaleTimeString()}</span> <strong>You:</strong> ${text}`;
+  feed.appendChild(d); feed.scrollTop=feed.scrollHeight;
+  log('r-log','≡ƒÆ¼ Sent: '+text,'inf');
+}
+
+// ΓöÇΓöÇ TTS ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+async function ttsPiper(){
+  const text=document.getElementById('tts-text').value.trim();
+  const voice=document.getElementById('tts-voice').value;
+  if(!text){log('r-log','Enter text first','wrn');return;}
+  log('r-log',`TTS ΓåÆ "${text.slice(0,40)}"  voice=${voice}`,'inf');
+  try{
+    const res=await fetch(`${API}/tts/speak`,{
+      method:'POST',
+      headers:{...HEADERS,'Content-Type':'application/json'},
+      body:JSON.stringify({text,voice}),
+    });
+    if(!res.ok) throw new Error(`${res.status}`);
+    const blob=await res.blob();
+    await new Audio(URL.createObjectURL(blob)).play();
+    log('r-log','Γ£ô Piper TTS playing','ok');
+  }catch(e){
+    log('r-log','Piper failed: '+e.message+' ΓÇö browser TTS fallback','wrn');
+    ttsBrowser();
+  }
+}
+
+function ttsBrowser(){
+  const text=document.getElementById('tts-text').value.trim()||'Hello, this is Helen.';
+  const u=new SpeechSynthesisUtterance(text);
+  u.rate=0.95;
+  window.speechSynthesis.speak(u);
+  log('r-log','≡ƒöë Browser TTS: '+text.slice(0,50));
+}
+</script>
+</body>
+</html>
