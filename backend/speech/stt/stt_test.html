@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>STT Tester — SR Comsoft</title>
+  <style>
+    :root {
+      --bg:      #0d0f18;
+      --surface: #14172a;
+      --border:  #262b4a;
+      --accent:  #4f7ef7;
+      --success: #22c55e;
+      --danger:  #ef4444;
+      --warning: #f59e0b;
+      --text:    #e2e8f0;
+      --muted:   #7a86a1;
+      --radius:  12px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 32px 16px;
+      gap: 20px;
+    }
+
+    h1 { font-size: 22px; font-weight: 700; color: var(--accent); }
+    .sub { font-size: 13px; color: var(--muted); }
+
+    /* ── Card ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+      width: 100%;
+      max-width: 680px;
+    }
+
+    /* ── Row ── */
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    label { font-size: 12px; color: var(--muted); }
+
+    select {
+      background: #1c2040;
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 7px 28px 7px 10px;
+      font-size: 13px;
+      cursor: pointer;
+      outline: none;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%237a86a1' viewBox='0 0 16 16'%3E%3Cpath d='M7.247 11.14L2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 8px center;
+      background-size: 11px;
+    }
+    select:focus { border-color: var(--accent); }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 9px 20px;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.1s;
+    }
+    .btn:disabled { opacity: 0.38; cursor: not-allowed; }
+    .btn:active:not(:disabled) { transform: scale(0.97); }
+    .btn-start { background: var(--success); color: #fff; }
+    .btn-stop  { background: var(--danger);  color: #fff; }
+    .btn-clear { background: #1c2040; color: var(--muted); border: 1px solid var(--border); }
+
+    /* ── RMS bar ── */
+    .rms-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .rms-label { font-size: 11px; color: var(--muted); width: 80px; flex-shrink: 0; }
+    .rms-track {
+      flex: 1;
+      height: 8px;
+      background: #1c2040;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .rms-bar {
+      height: 100%;
+      width: 0%;
+      background: var(--success);
+      border-radius: 4px;
+      transition: width 0.08s;
+    }
+    .rms-val { font-size: 11px; color: var(--muted); width: 44px; text-align: right; flex-shrink: 0; }
+
+    /* ── Status ── */
+    .status-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 14px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .sdot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--muted);
+      flex-shrink: 0;
+    }
+    .sdot.idle    { background: var(--muted); }
+    .sdot.active  { background: var(--success); animation: blink 1.2s infinite; }
+    .sdot.thinking{ background: var(--warning); animation: blink 0.6s infinite; }
+    .sdot.error   { background: var(--danger); }
+    @keyframes blink {
+      0%,100% { opacity:1; } 50% { opacity:0.3; }
+    }
+
+    /* ── Transcripts ── */
+    .tx-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .tx-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
+
+    .tx-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 420px;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
+    }
+    .tx-list::-webkit-scrollbar { width: 4px; }
+    .tx-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    .tx-item {
+      background: #111528;
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 14px;
+      line-height: 1.6;
+      animation: fadeUp 0.15s ease;
+    }
+    .tx-item.pending {
+      border-left-color: var(--warning);
+      color: var(--muted);
+      font-style: italic;
+    }
+    @keyframes fadeUp {
+      from { opacity:0; transform:translateY(5px); }
+      to   { opacity:1; transform:translateY(0); }
+    }
+
+    .tx-meta {
+      font-size: 10px;
+      color: var(--muted);
+      margin-top: 5px;
+      display: flex;
+      gap: 12px;
+    }
+
+    .tx-empty {
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+      padding: 30px 0;
+    }
+
+    /* ── Info strip ── */
+    .info-strip {
+      font-size: 12px;
+      color: var(--muted);
+      background: #111528;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 16px;
+      max-width: 680px;
+      width: 100%;
+      line-height: 1.7;
+    }
+    .info-strip strong { color: var(--text); }
+  </style>
+</head>
+<body>
+
+<h1>🎙️ STT Tester</h1>
+<div class="sub">Speak into your mic — see what Whisper hears in real time</div>
+
+<!-- ── Controls ── -->
+<div class="card">
+  <div class="row">
+    <label>Language</label>
+    <select id="sel-lang">
+      <option value="">Loading…</option>
+    </select>
+
+    <label style="margin-left:8px">Silence gap</label>
+    <select id="sel-gap">
+      <option value="800">0.8 s</option>
+      <option value="1000" selected>1.0 s</option>
+      <option value="1500">1.5 s</option>
+      <option value="2000">2.0 s</option>
+    </select>
+
+    <button class="btn btn-start" id="btn-start" onclick="startRecording()">🎙️ Start</button>
+    <button class="btn btn-stop"  id="btn-stop"  onclick="stopRecording()" disabled>⏹ Stop</button>
+  </div>
+
+  <!-- RMS level bar -->
+  <div class="rms-wrap">
+    <div class="rms-label">Mic level</div>
+    <div class="rms-track"><div class="rms-bar" id="rms-bar"></div></div>
+    <div class="rms-val"  id="rms-val">0.000</div>
+  </div>
+
+  <!-- Status -->
+  <div class="status-row">
+    <div class="sdot idle" id="sdot"></div>
+    <span id="status-txt">Select language and click Start</span>
+  </div>
+</div>
+
+<!-- ── Transcript log ── -->
+<div class="card">
+  <div class="tx-head">
+    <div class="tx-title">Transcripts</div>
+    <button class="btn btn-clear" onclick="clearLog()">🗑 Clear</button>
+  </div>
+  <div class="tx-list" id="tx-list">
+    <div class="tx-empty" id="tx-empty">No transcripts yet — click Start and speak</div>
+  </div>
+</div>
+
+<!-- ── Info ── -->
+<div class="info-strip">
+  <strong>How it works:</strong>
+  Your mic audio (PCM 16 kHz) is streamed over WebSocket to the server.
+  Whisper STT (small model) transcribes each utterance after <strong id="gap-info">1.0 s</strong> of silence.
+  RMS floor = <strong>0.015</strong> — wind/breath below this is skipped. Silero VAD also filters noise before Whisper.
+</div>
+
+<script>
+'use strict';
+
+/* ── AudioWorklet processor ─────────────────────────────────────────────── */
+const WORKLET_CODE = `
+class PCMProcessor extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    this._buf   = [];
+    this._ratio = sampleRate / 16000;
+    this._pos   = 0;
+  }
+  process(inputs) {
+    const ch = inputs[0]?.[0];
+    if (!ch) return true;
+    while (this._pos < ch.length) {
+      this._buf.push(ch[Math.floor(this._pos)]);
+      this._pos += this._ratio;
+    }
+    this._pos -= ch.length;
+    if (this._buf.length >= 1600) {
+      this.port.postMessage(new Float32Array(this._buf.splice(0, 1600)));
+    }
+    return true;
+  }
+}
+registerProcessor('pcm-proc', PCMProcessor);
+`;
+
+/* ── State ──────────────────────────────────────────────────────────────── */
+let ws        = null;
+let capCtx    = null;
+let srcNode   = null;
+let worklet   = null;
+let micStream = null;
+let active    = false;
+
+const $ = id => document.getElementById(id);
+
+function setStatus(state, text) {
+  $('sdot').className = `sdot ${state}`;
+  $('status-txt').textContent = text;
+}
+
+function updateRms(rms) {
+  const pct = Math.min(rms / 0.12 * 100, 100).toFixed(1);
+  $('rms-bar').style.width = pct + '%';
+  $('rms-bar').style.background = rms > 0.04 ? 'var(--success)' :
+                                  rms > 0.015 ? 'var(--warning)' : 'var(--danger)';
+  $('rms-val').textContent = rms.toFixed(3);
+}
+
+function addTranscript(text, rms, ms) {
+  const empty = $('tx-empty');
+  if (empty) empty.remove();
+
+  const item = document.createElement('div');
+  item.className = 'tx-item';
+  item.textContent = text;
+
+  const meta = document.createElement('div');
+  meta.className = 'tx-meta';
+  meta.innerHTML = `<span>⚡ ${(ms/1000).toFixed(2)}s</span><span>📊 rms ${rms.toFixed(3)}</span><span>🕐 ${new Date().toLocaleTimeString()}</span>`;
+  item.appendChild(meta);
+
+  const list = $('tx-list');
+  list.appendChild(item);
+  list.scrollTop = list.scrollHeight;
+}
+
+function clearLog() {
+  $('tx-list').innerHTML = '<div class="tx-empty" id="tx-empty">No transcripts yet — click Start and speak</div>';
+}
+
+/* ── Recording ──────────────────────────────────────────────────────────── */
+async function startRecording() {
+  if (active) return;
+
+  const lang = $('sel-lang').value;
+  const gap  = parseInt($('sel-gap').value, 10);
+
+  $('btn-start').disabled = true;
+  $('sel-lang').disabled  = true;
+  $('sel-gap').disabled   = true;
+  setStatus('thinking', 'Requesting mic…');
+
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+  } catch {
+    alert('Microphone access denied. Please allow mic access and reload.');
+    resetUI();
+    return;
+  }
+
+  capCtx = new AudioContext({ sampleRate: 48000 });
+  const blobUrl = URL.createObjectURL(new Blob([WORKLET_CODE], { type: 'application/javascript' }));
+  await capCtx.audioWorklet.addModule(blobUrl);
+  URL.revokeObjectURL(blobUrl);
+
+  srcNode = capCtx.createMediaStreamSource(micStream);
+  worklet  = new AudioWorkletNode(capCtx, 'pcm-proc');
+
+  worklet.port.onmessage = e => {
+    const chunk = e.data;
+    // Compute RMS for display
+    let sum = 0;
+    for (let i = 0; i < chunk.length; i++) sum += chunk[i] * chunk[i];
+    const rms = Math.sqrt(sum / chunk.length);
+    updateRms(rms);
+
+    if (ws?.readyState === WebSocket.OPEN) {
+      ws.send(chunk.buffer);
+    }
+  };
+
+  srcNode.connect(worklet);
+
+  // Open WebSocket to STT test endpoint
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(`${proto}//${location.host}/ws/stt-test?lang=${encodeURIComponent(lang)}&gap=${gap}`);
+  ws.binaryType = 'arraybuffer';
+
+  ws.onopen = () => {
+    active = true;
+    $('btn-stop').disabled = false;
+    setStatus('active', `Listening in ${$('sel-lang').options[$('sel-lang').selectedIndex].text.replace(/^.+ /, '')}… speak now`);
+  };
+
+  ws.onmessage = evt => {
+    let data;
+    try { data = JSON.parse(evt.data); } catch { return; }
+
+    if (data.type === 'transcript') {
+      addTranscript(data.text, data.rms ?? 0, data.elapsed_ms ?? 0);
+      setStatus('active', 'Listening… speak again');
+    } else if (data.type === 'processing') {
+      setStatus('thinking', 'Transcribing…');
+    } else if (data.type === 'skipped') {
+      const msg = data.reason === 'rms'
+        ? `Too quiet (rms ${data.rms?.toFixed(3)}) — speak louder`
+        : `No speech detected (rms ${data.rms?.toFixed(3)}) — speak clearly & closer to mic`;
+      setStatus('active', msg);
+    }
+  };
+
+  ws.onclose = () => { if (active) resetUI(); };
+  ws.onerror = () => { setStatus('error', 'WebSocket error'); resetUI(); };
+}
+
+function stopRecording() {
+  ws?.close();
+  resetUI();
+}
+
+function resetUI() {
+  active = false;
+  $('btn-start').disabled = false;
+  $('btn-stop').disabled  = true;
+  $('sel-lang').disabled  = false;
+  $('sel-gap').disabled   = false;
+  updateRms(0);
+  setStatus('idle', 'Select language and click Start');
+  try { worklet?.disconnect(); srcNode?.disconnect(); } catch {}
+  try { capCtx?.close(); } catch {}
+  try { micStream?.getTracks().forEach(t => t.stop()); } catch {}
+  ws = null; capCtx = null; worklet = null; srcNode = null; micStream = null;
+}
+
+// Keep gap info label in sync
+$('sel-gap').addEventListener('change', () => {
+  $('gap-info').textContent = ($('sel-gap').value / 1000).toFixed(1) + ' s';
+});
+
+// ── All language display names (covers Global TTS + Indic TTS + others) ────
+const LANG_LABELS = {
+  en:      '🇬🇧 English',
+  fr:      '🇫🇷 French',
+  de:      '🇩🇪 German',
+  es:      '🇪🇸 Spanish',
+  pt:      '🇵🇹 Portuguese',
+  pl:      '🇵🇱 Polish',
+  it:      '🇮🇹 Italian',
+  nl:      '🇳🇱 Dutch',
+  hi:      '🇮🇳 Hindi',
+  'en-in': '🇮🇳 English (Indian)',
+  mr:      '🇮🇳 Marathi',
+  bn:      '🇧🇩 Bengali',
+  ta:      '🇮🇳 Tamil',
+  te:      '🇮🇳 Telugu',
+  gu:      '🇮🇳 Gujarati',
+  kn:      '🇮🇳 Kannada',
+  ml:      '🇮🇳 Malayalam',
+  pa:      '🇮🇳 Punjabi',
+  or:      '🇮🇳 Odia',
+  as:      '🇮🇳 Assamese',
+  ur:      '🇵🇰 Urdu',
+  ar:      '🇸🇦 Arabic',
+  ru:      '🇷🇺 Russian',
+  ne:      '🇳🇵 Nepali',
+  zh:      '🇨🇳 Chinese',
+};
+
+// ── Populate language dropdown from /api/voices ──────────────────────────
+(async () => {
+  const sel = $('sel-lang');
+  try {
+    const res = await fetch('/api/voices');
+    const registry = await res.json();
+    const langs = Object.keys(registry).sort();
+    sel.innerHTML = '';
+    langs.forEach(code => {
+      const opt = document.createElement('option');
+      opt.value = code;
+      opt.textContent = LANG_LABELS[code] || code.toUpperCase();
+      sel.appendChild(opt);
+    });
+    if (registry['en']) sel.value = 'en';
+  } catch {
+    // Fallback if API unreachable — show common languages
+    sel.innerHTML = '';
+    Object.entries(LANG_LABELS).forEach(([code, label]) => {
+      const opt = document.createElement('option');
+      opt.value = code;
+      opt.textContent = label;
+      sel.appendChild(opt);
+    });
+    sel.value = 'en';
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Indic Parler TTS — Voice Studio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- Model loading banner -->
+  <div id="model-banner" class="model-banner hidden">
+    <div class="banner-inner">
+      <span class="spinner"></span>
+      <span>First launch: downloading model (~1.5GB). Please wait…</span>
+    </div>
+  </div>
+
+  <div class="app-shell">
+
+    <!-- Sidebar controls -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="logo-mark">TTS</div>
+        <div>
+          <h1>Voice Studio</h1>
+          <p class="subtitle">Indic Parler TTS</p>
+        </div>
+      </div>
+
+      <div class="field-group">
+        <label for="language">Language</label>
+        <select id="language">
+          <option value="Hindi">Hindi — हिन्दी</option>
+          <option value="English (Indian)">English (Indian)</option>
+          <option value="Bengali">Bengali — বাংলা</option>
+          <option value="Tamil">Tamil — தமிழ்</option>
+          <option value="Telugu">Telugu — తెలుగు</option>
+          <option value="Marathi">Marathi — मराठी</option>
+          <option value="Gujarati">Gujarati — ગુજરાતી</option>
+          <option value="Kannada">Kannada — ಕನ್ನಡ</option>
+          <option value="Malayalam">Malayalam — മലയാളം</option>
+          <option value="Punjabi">Punjabi — ਪੰਜਾਬੀ</option>
+          <option value="Odia">Odia — ଓଡ଼ିଆ</option>
+          <option value="Assamese">Assamese — অসমীয়া</option>
+          <option value="Urdu">Urdu — اردو</option>
+        </select>
+      </div>
+
+      <div class="field-group">
+        <label for="voice">Voice <span id="voice-count" class="voice-count"></span></label>
+        <select id="voice"></select>
+      </div>
+
+      <div class="field-group">
+        <label for="emotion">Emotion</label>
+        <select id="emotion">
+          <option value="neutral">Neutral</option>
+          <option value="happy">Happy</option>
+          <option value="sad">Sad</option>
+          <option value="angry">Angry</option>
+          <option value="urgent">Urgent</option>
+          <option value="calm">Calm</option>
+        </select>
+      </div>
+
+      <div class="field-group">
+        <label for="text-input">Input Text</label>
+        <textarea
+          id="text-input"
+          rows="6"
+          placeholder="Type Hindi, English, or any Indian language text here…&#10;&#10;e.g. Aapka order confirm ho gaya hai."
+        ></textarea>
+        <div id="char-count" class="char-count">0 / 1000</div>
+      </div>
+
+      <button id="generate-btn" class="generate-btn">Generate</button>
+      <div id="error-msg" class="error-msg hidden"></div>
+      <div id="status-msg" class="status-msg hidden"></div>
+    </aside>
+
+    <!-- Main preview panel -->
+    <main class="preview-panel">
+
+      <section id="current-section" class="current-section hidden">
+        <h2>Current Recording <span id="new-badge" class="badge-new">NEW</span></h2>
+        <div id="current-card" class="audio-card current-card"></div>
+      </section>
+
+      <section id="previous-section" class="previous-section hidden">
+        <h2>Previous Recording</h2>
+        <div id="previous-card" class="audio-card previous-card"></div>
+      </section>
+
+      <section id="all-section">
+        <div class="all-header">
+          <h2>All Recordings</h2>
+          <button id="clear-btn" class="clear-btn">Clear All</button>
+        </div>
+        <div id="recordings-list" class="recordings-list">
+          <p class="empty-state">No recordings yet. Generate your first voice.</p>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

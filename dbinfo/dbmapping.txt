@@ -1,0 +1,1257 @@
+================================================================================
+  ADMIN DASHBOARD — COMPLETE DATABASE MAPPING
+  Project: VoiceAIcore  |  Generated: 2026-04-20
+================================================================================
+  NOTE: User Dashboard mapping is at the BOTTOM of this file (Section U)
+================================================================================
+
+Legend:
+  [DB]   = Connected to database
+  [MEM]  = In-memory only (lost on server restart)
+  [PROP] = Receives data via props (no direct API call)
+  [NONE] = Not connected to DB
+
+================================================================================
+  PAGE 1: AdminSettings.jsx
+  Path: call-test/src/pages/admin/AdminSettings.jsx
+  Purpose: User role management and RBAC dashboard
+================================================================================
+
+COMPONENT        : AdminSettings (main)
+FEATURE          : List all users
+API ENDPOINT     : GET /api/admin/users
+TABLE            : users
+COLUMNS          : id, name, email, role, is_active, phone_number, created_at
+POLLING          : 5s silent refresh
+
+COMPONENT        : AdminSettings (main)
+FEATURE          : Aggregated user statistics
+API ENDPOINT     : GET /api/admin/stats
+TABLE            : users
+COLUMNS          : id (COUNT), role, is_active, credits (SUM)
+NOTE             : Also counts calls from cc_sessions
+
+COMPONENT        : AdminSettings / Toggle Status button
+FEATURE          : Enable / Disable user account
+API ENDPOINT     : PUT /api/admin/users/{user_id}/status
+TABLE            : users
+COLUMNS          : is_active
+NOTE             : Flips boolean via NOT is_active
+
+COMPONENT        : AdminSettings / Role Dropdown
+FEATURE          : Change user role (admin/superuser/agent/user)
+API ENDPOINT     : PUT /api/admin/users/{user_id}/role
+TABLE            : users
+COLUMNS          : role
+
+COMPONENT        : CreditsModal
+FEATURE          : Add credits to user account
+API ENDPOINT     : PUT /api/admin/users/{user_id}/credits
+TABLE            : users
+COLUMNS          : credits
+STATUS           : [DB]
+
+COMPONENT        : StatCard
+FEATURE          : Display KPI metric cards
+API ENDPOINT     : N/A (display-only)
+STATUS           : [NONE] — Pure presentation, data from parent state
+
+COMPONENT        : ConfirmModal
+FEATURE          : Confirmation dialog before destructive actions
+API ENDPOINT     : N/A (no direct call)
+STATUS           : [NONE] — Input gate only
+
+
+================================================================================
+  PAGE 2: Admindashboard.jsx
+  Path: call-test/src/pages/admin/Admindashboard.jsx
+  Purpose: Central admin intelligence hub — call analytics, staff, AI queries
+================================================================================
+
+COMPONENT        : Admindashboard (main)
+FEATURE          : Fetch call logs for dashboard display
+API ENDPOINT     : GET /api/calls
+TABLE            : cc_sessions (primary), cc_callers (JOIN)
+COLUMNS USED     :
+  cc_sessions  — id, session_id, room_id, department, status, call_duration,
+                  agent_id, created_at, ended_at, recording_url,
+                  recording_consent, wait_seconds, csat
+  cc_callers   — id, email (as caller_number), display_name (as caller_name)
+POLLING          : 5s silent refresh; paused while AI query is active
+
+COMPONENT        : Admindashboard / "View Transcript" button on log cards
+FEATURE          : Expand inline call transcript per log card
+API ENDPOINT     : GET /api/calls/{call_id}/transcript
+TABLE            : transcripts
+COLUMNS          : id, call_id, session_id, speaker, text, sentiment, created_at
+STATUS           : [DB]
+
+COMPONENT        : Admindashboard / NL2SQL Search Box (AIQueryCategories)
+FEATURE          : Natural language query → dynamic SQL → results
+API ENDPOINT     : POST /api/nl2sql  (also POST /api/ask for Neural Engine)
+TABLE            : cc_sessions (dynamic, depends on query intent)
+COLUMNS          : Varies with query — typically department, status, csat, created_at
+STATUS           : [DB]
+
+COMPONENT        : Admindashboard / "Call Transcripts & Logs" box
+FEATURE          : Show recent call records with status, sentiment, dept
+API ENDPOINT     : GET /api/calls (same fetch as main dashboard)
+TABLE            : cc_sessions, cc_callers
+COLUMNS          : id, department, status, sentiment, created_at, email, display_name
+STATUS           : [DB] — fixed in last session (field mapping corrected)
+
+COMPONENT        : StaffPerformance (embedded in Admindashboard)
+FEATURE          : Team and agent performance charts
+API ENDPOINT     : N/A — receives filteredLogs from parent
+TABLE            : (Indirectly) cc_sessions via parent props
+COLUMNS USED     : department, agent_id, csat, call_duration
+STATUS           : [PROP] — NOT directly connected to DB
+
+COMPONENT        : AIQueryCategories (embedded in Admindashboard)
+FEATURE          : Query category bar chart + intent bubble chart
+API ENDPOINT     : N/A — chart data derived from parent filteredLogs
+TABLE            : (Indirectly) cc_sessions
+COLUMNS USED     : department (as category), status, created_at
+STATUS           : [PROP] — NOT directly connected to DB
+
+COMPONENT        : Team Performance Bar Chart (inside StaffPerformance)
+FEATURE          : Calls per department visualization
+STATUS           : [PROP] — aggregated from filteredLogs in parent
+
+COMPONENT        : Agent Breakdown Scatter Plot (inside StaffPerformance)
+FEATURE          : X=call count, Y=CSAT per agent
+STATUS           : [PROP]
+
+COMPONENT        : Query Bar Chart (inside AIQueryCategories)
+FEATURE          : Volume per department/category
+STATUS           : [PROP]
+
+COMPONENT        : Intent Clusters Bubble Chart (inside AIQueryCategories)
+FEATURE          : Volume-scaled scatter of query intents
+STATUS           : [PROP]
+
+
+================================================================================
+  PAGE 3: LiveQuerySimulator.jsx
+  Path: call-test/src/pages/admin/LiveQuerySimulator.jsx
+  Purpose: Interactive NLP classification and query routing test lab
+================================================================================
+
+COMPONENT        : LiveQuerySimulator / Fetch call logs
+FEATURE          : Load existing simulated logs
+API ENDPOINT     : GET /api/calls
+TABLE            : cc_sessions
+COLUMNS          : id, department, status, created_at
+STATUS           : [DB]
+
+COMPONENT        : LiveQuerySimulator / Submit Query button
+FEATURE          : AI categorization of submitted query (RAG)
+API ENDPOINT     : POST /api/rag
+TABLE            : N/A — ML/LLM inference, no DB write
+STATUS           : [MEM] — inference result stored in component state
+
+COMPONENT        : LiveQuerySimulator / Create simulated call
+FEATURE          : Insert a new test call log
+API ENDPOINT     : POST /api/calls
+TABLE            : cc_sessions
+COLUMNS          : department (as category), status, created_at
+STATUS           : [DB]
+
+COMPONENT        : LiveQuerySimulator / Resolve / Escalate buttons
+FEATURE          : Update call status
+API ENDPOINT     : PUT /api/calls/{id}
+TABLE            : cc_sessions
+COLUMNS          : status
+STATUS           : [DB]
+
+COMPONENT        : Bubble Chart (inside LiveQuerySimulator)
+FEATURE          : Intent clustering visualization
+STATUS           : [NONE] — rendered from in-memory simulatedLogs array
+
+COMPONENT        : Sankey Diagram (inside LiveQuerySimulator)
+FEATURE          : Resolution flow visualization
+STATUS           : [NONE] — computed from simulatedLogs state
+
+COMPONENT        : 3D Scatter Modal (inside LiveQuerySimulator)
+FEATURE          : WebGL scatter plot of intent clusters
+STATUS           : [NONE] — data mapped from in-memory state
+
+
+================================================================================
+  PAGE 4: StaffPerformance.jsx
+  Path: call-test/src/pages/admin/StaffPerformance.jsx
+  Purpose: Focused staff/agent performance analytics view
+================================================================================
+
+COMPONENT        : StaffPerformance (main)
+FEATURE          : All charts and metrics
+API ENDPOINT     : N/A
+STATUS           : [PROP] — receives filteredLogs from Admindashboard parent
+TABLE            : (Indirectly) cc_sessions
+COLUMNS USED     : department, agent_id, csat, call_duration
+NOTE             : Does NOT make any fetch calls itself
+
+
+================================================================================
+  PAGE 5: AIQueryCategories.jsx
+  Path: call-test/src/pages/admin/AIQueryCategories.jsx
+  Purpose: Query category analysis + NL2SQL smart search interface
+================================================================================
+
+COMPONENT        : AIQueryCategories / NL2SQL Search Box
+FEATURE          : Natural language → SQL → results
+API ENDPOINT     : POST /api/nl2sql
+TABLE            : cc_sessions (and joins, dynamic per query)
+COLUMNS          : Varies with query
+STATUS           : [DB]
+
+COMPONENT        : AIQueryCategories / Charts (bar, bubble)
+FEATURE          : Visualization of category distribution
+API ENDPOINT     : N/A — from parent props
+STATUS           : [PROP]
+
+
+================================================================================
+  PANEL: ActiveCallsPanel.jsx
+  Path: call-test/src/components/IVR/ActiveCallsPanel.jsx
+  Purpose: Real-time supervision of active WebRTC + PSTN calls
+================================================================================
+
+COMPONENT        : ActiveCallsPanel (main)
+FEATURE          : Live active calls list
+API ENDPOINT     : GET /api/calls/active  (3-second polling or WebSocket)
+TABLE            : cc_sessions, cc_callers
+COLUMNS          :
+  cc_sessions  — id, session_id, room_id, department, status, call_duration,
+                  agent_id, created_at, sla_target_seconds, sla_breached,
+                  recording_consent, recording_url, wait_seconds
+  cc_callers   — email, display_name
+POLLING          : 3s interval; upgrades to WebSocket when available
+
+COMPONENT        : TranscriptModal (inside ActiveCallsPanel)
+FEATURE          : View live call transcript in modal
+API ENDPOINT     : GET /api/calls/{call_id}/transcript
+TABLE            : transcripts
+COLUMNS          : id, call_id, session_id, speaker, text, sentiment, created_at
+STATUS           : [DB] — fetches on modal open
+
+COMPONENT        : TranscriptModal / Add entry
+FEATURE          : Manual transcript insertion
+API ENDPOINT     : POST /api/calls/{call_id}/transcript
+TABLE            : transcripts
+COLUMNS          : call_id, session_id, speaker, text, sentiment
+STATUS           : [DB]
+
+COMPONENT        : RecordingPlayer (inside ActiveCallsPanel)
+FEATURE          : Play call recording audio
+API ENDPOINT     : GET /api/calls/{call_id}/recording
+TABLE            : cc_sessions
+COLUMNS          : recording_url, recording_consent
+STATUS           : [DB] — URL resolved from DB; audio served as file stream
+
+COMPONENT        : "End Call" button (ActiveCallRow)
+FEATURE          : Terminate active call
+API ENDPOINT     : POST /api/calls/{call_id}/end
+TABLE            : cc_sessions, call_summaries
+COLUMNS          : status, ended_at, call_duration (cc_sessions); summary text (call_summaries)
+STATUS           : [DB]
+
+COMPONENT        : "Transfer" button (TransferMini)
+FEATURE          : Transfer call to another department
+API ENDPOINT     : POST /api/calls/{call_id}/transfer
+TABLE            : cc_sessions
+COLUMNS          : status, department
+STATUS           : [DB]
+
+COMPONENT        : "Take Over" button (ActiveCallRow)
+FEATURE          : Admin joins active call (LiveKit)
+API ENDPOINT     : POST /api/calls/{call_id}/takeover
+TABLE            : cc_sessions
+COLUMNS          : session_id, room_id
+STATUS           : [DB] — retrieves LiveKit room token
+
+COMPONENT        : StatusBadge
+FEATURE          : Color-coded call status label
+STATUS           : [NONE] — pure presentation, value from row prop
+
+COMPONENT        : SLABadge
+FEATURE          : SLA breach indicator
+STATUS           : [NONE] — computed from sla_target_seconds and created_at
+
+COMPONENT        : ConsentBadge
+FEATURE          : Recording consent display
+STATUS           : [NONE] — display-only, value from row.recording_consent
+
+COMPONENT        : LiveDuration
+FEATURE          : Real-time call duration counter
+STATUS           : [NONE] — JS timer, increments from created_at
+
+
+================================================================================
+  PANEL: HistoryPanel.jsx
+  Path: call-test/src/components/IVR/HistoryPanel.jsx
+  Purpose: Searchable call history audit trail  (DATE FILTER KEPT HERE)
+================================================================================
+
+COMPONENT        : HistoryPanel (main)
+FEATURE          : Paginated call history list
+API ENDPOINT     : GET /api/calls?limit=50
+TABLE            : cc_sessions, cc_callers
+COLUMNS          :
+  cc_sessions  — id, session_id, room_id, department, status, call_duration,
+                  agent_id, created_at, ended_at, recording_url,
+                  recording_consent, wait_seconds, csat
+  cc_callers   — email (caller_number), display_name (caller_name)
+POLLING          : 5s silent refresh
+DATE FILTER      : Kept — client-side filter on created_at
+
+COMPONENT        : HistoryPanel / Transcript Modal
+FEATURE          : View full call transcript
+API ENDPOINT     : GET /api/calls/{call_id}/transcript
+TABLE            : transcripts
+COLUMNS          : id, speaker, text, sentiment, created_at
+STATUS           : [DB]
+
+COMPONENT        : HistoryPanel / Delete button
+FEATURE          : Remove call record
+API ENDPOINT     : DELETE /api/calls/{call_id}
+TABLE            : cc_sessions
+COLUMNS          : id
+STATUS           : [DB]
+
+COMPONENT        : HistoryPanel / Search bar
+FEATURE          : Filter calls by text (client-side)
+STATUS           : [NONE] — filters local state, no API call
+FILTERS ON       : caller_number, caller_name, agent_name, department, status, sentiment
+
+COMPONENT        : HistoryPanel / Date range picker
+FEATURE          : Filter calls by date range (ONLY panel that keeps date filter)
+STATUS           : [NONE] — client-side filter on created_at field
+
+
+================================================================================
+  PANEL: BroadcastPanel.jsx
+  Path: call-test/src/components/IVR/BroadcastPanel.jsx
+  Purpose: Multi-channel broadcasting — WebRTC voice + email campaigns
+================================================================================
+
+--- BROADCAST (WebRTC) ---
+
+COMPONENT        : BroadcastPanel / Active Broadcasts list
+FEATURE          : Show live broadcast sessions
+API ENDPOINT     : GET /api/webrtc/broadcast/active
+TABLE            : N/A — in-memory _broadcasts list on server
+STATUS           : [MEM]
+
+COMPONENT        : BroadcastPanel / Broadcast History list
+FEATURE          : Show past broadcast sessions
+API ENDPOINT     : GET /api/webrtc/broadcast/history?limit=20
+TABLE            : N/A — in-memory _broadcasts list on server
+STATUS           : [MEM]
+
+COMPONENT        : BroadcastPanel / Start Broadcast form
+FEATURE          : Create a new broadcast room (LiveKit)
+API ENDPOINT     : POST /api/webrtc/broadcast/start
+TABLE            : N/A — generates LiveKit room, stored in memory
+STATUS           : [MEM]
+
+COMPONENT        : BroadcastPanel / End Broadcast button
+FEATURE          : Terminate broadcast session
+API ENDPOINT     : POST /api/webrtc/broadcast/{id}/end
+TABLE            : N/A — updates in-memory status
+STATUS           : [MEM]
+
+COMPONENT        : BroadcastPanel / Listener Token
+FEATURE          : Get LiveKit token to listen to broadcast
+API ENDPOINT     : GET /api/webrtc/broadcast/{id}/token
+TABLE            : N/A — token generated from in-memory room data
+STATUS           : [MEM]
+
+--- EMAIL CAMPAIGNS ---
+
+COMPONENT        : BroadcastPanel / SMTP Status indicator
+FEATURE          : Check if email is configured
+API ENDPOINT     : GET /api/email/status
+TABLE            : admin_config (SMTP keys stored here)
+COLUMNS          : key (smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from)
+STATUS           : [DB] — config fetched from admin_config table
+
+COMPONENT        : BroadcastPanel / Template list
+FEATURE          : Load email templates for quick compose
+API ENDPOINT     : GET /api/email/templates
+TABLE            : N/A — in-memory _email_templates list
+STATUS           : [MEM]
+
+COMPONENT        : BroadcastPanel / Create Template form
+FEATURE          : Save a new email template
+API ENDPOINT     : POST /api/email/templates
+TABLE            : N/A — stored in _email_templates in-memory
+STATUS           : [MEM]
+
+COMPONENT        : BroadcastPanel / Seed Templates button
+FEATURE          : Reset templates to defaults
+API ENDPOINT     : POST /api/email/templates/seed
+TABLE            : N/A — resets _email_templates in-memory
+STATUS           : [MEM]
+
+COMPONENT        : BroadcastPanel / Campaign History list
+FEATURE          : Show sent email campaigns
+API ENDPOINT     : GET /api/email/campaigns
+TABLE            : outbound_queue
+COLUMNS          : id, user_email, department, status, last_attempt, scheduler_email_sent
+STATUS           : [DB] — partially
+
+COMPONENT        : BroadcastPanel / Send Email form
+FEATURE          : Send email campaign to department/users
+API ENDPOINT     : POST /api/email/send
+TABLE            : N/A — SMTP delivery + in-memory _campaigns list
+STATUS           : [MEM] — no DB write for the send itself
+
+WARNING          : Broadcasts + email templates are VOLATILE — lost on server restart.
+                   Campaign history survives only if queued via outbound_queue.
+
+
+================================================================================
+  SUPERUSER ROUTES — ADMIN NEURAL ENGINE
+  Path: backend/api/superuser_routes.py
+================================================================================
+
+COMPONENT        : Neural Engine / Ask AI Query box
+FEATURE          : Natural language query → AI analysis of call data
+API ENDPOINT     : POST /api/ask
+TABLE            : cc_sessions, agent_states, cc_callers
+COLUMNS          :
+  cc_sessions  — session_id, status, department, call_duration, created_at, agent_id
+  agent_states — agent_identity, agent_name, department, status, last_heartbeat
+  cc_callers   — email, display_name
+SQL COMPUTED     : calls_handled (COUNT via CTE from cc_sessions — NOT a column)
+AI BACKEND       : Gemini (via _gemini_sync from backend.language.llm_core)
+FALLBACK         : Returns raw DB stats if Gemini/Ollama unreachable
+STATUS           : [DB]
+
+COMPONENT        : Superuser / Agent Performance Matrix (BubbleChart2D)
+FEATURE          : SVG bubble chart — calls vs CSAT vs workload by risk level
+API ENDPOINT     : GET /api/superuser/realtime
+TABLE            : agent_states, cc_sessions (LEFT JOIN via CTE)
+COLUMNS          :
+  agent_states — agent_identity, agent_name, department, status, last_heartbeat
+  cc_sessions  — agent_id, status, created_at (aggregated)
+COMPUTED         : calls_total, calls_handled, calls_active (from CTE)
+STATUS           : [DB] — fixed in last session (removed invalid calls_handled column)
+
+COMPONENT        : Superuser / Real-time Agent Roster
+FEATURE          : Live agent status grid
+API ENDPOINT     : GET /api/superuser/realtime
+TABLE            : agent_states
+COLUMNS          : agent_identity, agent_name, department, status, last_heartbeat
+STATUS           : [DB]
+
+COMPONENT        : Superuser / Sankey Flow chart
+FEATURE          : Call flow from department → agent → outcome
+API ENDPOINT     : GET /api/superuser/realtime  (same call as agent roster)
+TABLE            : cc_sessions
+COLUMNS          : department, agent_id, status, created_at
+STATUS           : [DB]
+
+COMPONENT        : Superuser / Scheduling Panel
+FEATURE          : View and manage scheduled callbacks
+API ENDPOINT     : GET /api/scheduling/stats  |  GET /api/scheduling/jobs
+TABLE            : outbound_queue
+COLUMNS          : id, user_email, department, status, scheduled_time,
+                   agent_identity, last_attempt, attempts
+STATUS           : [DB]
+
+COMPONENT        : Superuser / Create Scheduled Job form
+FEATURE          : Schedule a callback
+API ENDPOINT     : POST /api/scheduling/jobs
+TABLE            : outbound_queue, cc_callers, cc_sessions
+COLUMNS          : user_email, department, scheduled_time, agent_identity
+STATUS           : [DB]
+
+COMPONENT        : Superuser / Cancel Scheduled Job button
+FEATURE          : Delete a scheduled callback
+API ENDPOINT     : DELETE /api/scheduling/jobs/{job_id}
+TABLE            : outbound_queue
+COLUMNS          : id
+STATUS           : [DB]
+
+COMPONENT        : Superuser / Dept Breakdown stats
+FEATURE          : Call volume per department
+API ENDPOINT     : GET /api/superuser/realtime (parsed from response)
+TABLE            : cc_sessions
+COLUMNS          : department, COUNT(*) grouped
+STATUS           : [DB]
+
+
+================================================================================
+  ADMIN CONFIG PANEL
+  Path: admin_config table (key-value store)
+================================================================================
+
+COMPONENT        : Admin Config / Business Hours
+FEATURE          : Set open/close hours per day
+API ENDPOINT     : GET /api/cc/admin/config  |  POST /api/cc/admin/business-hours
+TABLE            : admin_config
+COLUMNS          : key (business_hours), value (JSON)
+STATUS           : [DB]
+
+COMPONENT        : Admin Config / Holiday Message
+FEATURE          : Set/clear holiday override message
+API ENDPOINT     : POST /api/cc/holiday  |  DELETE /api/cc/holiday
+TABLE            : admin_config
+COLUMNS          : key (holiday_active, holiday_message), value
+STATUS           : [DB]
+
+COMPONENT        : Admin Config / SMTP / Email Config
+FEATURE          : Configure outbound email settings
+API ENDPOINT     : GET /api/cc/admin/email-config  |  POST /api/cc/admin/email-config
+TABLE            : admin_config
+COLUMNS          : key (smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from), value
+STATUS           : [DB]
+
+COMPONENT        : Admin Config / Routing Rules
+FEATURE          : View and reload call routing rules
+API ENDPOINT     : GET /api/routing/rules  |  POST /api/routing/rules/reload
+TABLE            : routing engine (external config)
+STATUS           : [DB/FILE] — rule source depends on routing_engine config
+
+COMPONENT        : Admin Config / Clear Queues (DANGER)
+FEATURE          : Wipe all active queues and sessions (destructive)
+API ENDPOINT     : POST /api/cc/admin/clear-queues
+TABLE            : cc_sessions, outbound_queue, agent_states
+COLUMNS          : All rows cleared / status reset
+STATUS           : [DB] — destructive, clears all three tables
+
+
+================================================================================
+  COMPLETE DATABASE TABLE REFERENCE
+================================================================================
+
+TABLE: users
+  Purpose  : User accounts (login, roles, credits)
+  Columns  : id, name, email, role, is_active, phone_number, created_at, credits
+  Used by  : AdminSettings
+
+TABLE: cc_sessions
+  Purpose  : All call records (inbound, outbound, direct)
+  Columns  : id, session_id, room_id, caller_id (FK→cc_callers), department,
+             status, call_duration, agent_id, created_at, ended_at,
+             recording_url, recording_consent, wait_seconds, csat,
+             sla_target_seconds, sla_breached
+  Used by  : Admindashboard, HistoryPanel, ActiveCallsPanel, StaffPerformance,
+             superuser_routes, LiveQuerySimulator, callcenter/api
+  NOTE     : calls_handled is NOT a column — computed via COUNT(*) CTE
+
+TABLE: cc_callers
+  Purpose  : Caller/user identity directory
+  Columns  : id, email, display_name, last_seen
+  Used by  : Admindashboard, HistoryPanel, ActiveCallsPanel, callcenter/api
+
+TABLE: transcripts
+  Purpose  : Per-utterance call dialogue
+  Columns  : id, call_id, session_id, speaker, text, sentiment, created_at
+  Used by  : Admindashboard (inline expand), ActiveCallsPanel (modal),
+             HistoryPanel (modal)
+
+TABLE: agent_states
+  Purpose  : Agent presence and status registry
+  Columns  : agent_identity, agent_name, department, status, last_heartbeat
+  Used by  : superuser_routes (realtime, neural engine), callcenter/api
+  NOTE     : calls_handled NOT a column — computed from cc_sessions via CTE
+
+TABLE: outbound_queue
+  Purpose  : Scheduled callbacks and outbound campaign jobs
+  Columns  : id, user_email, department, status, scheduled_time, agent_identity,
+             last_attempt, attempts, scheduler_email_sent
+  Used by  : BroadcastPanel (campaign history), superuser_routes (scheduling),
+             callcenter/api (outbound flow)
+
+TABLE: call_summaries
+  Purpose  : AI-generated post-call sentiment summaries
+  Columns  : id, call_id, session_id, summary_text, sentiment, created_at
+  Used by  : home_routes (on call end), Admindashboard (indirectly via /api/calls)
+
+TABLE: admin_config
+  Purpose  : Key-value configuration store
+  Columns  : key, value (TEXT/JSON)
+  Key rows : business_hours, holiday_active, holiday_message,
+             smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from
+  Used by  : BroadcastPanel (SMTP status), callcenter/api (all config endpoints)
+
+
+================================================================================
+  COMPONENTS NOT CONNECTED TO DATABASE (FULL LIST)
+================================================================================
+
+COMPONENT               REASON
+StatCard                Display-only KPI card — renders prop values
+ConfirmModal            Confirmation dialog — no fetch, no write
+StatusBadge             Color-coded label from row.status prop
+SLABadge                Computed from sla_target_seconds + timestamps
+ConsentBadge            Display-only — value from row.recording_consent prop
+LiveDuration            JS setInterval timer from created_at — no DB
+RecordingPlayer         Audio <audio> element — plays URL from DB, no extra query
+TeamPerformanceChart    Aggregates filteredLogs prop from parent
+AgentBreakdownScatter   Aggregates filteredLogs prop from parent
+QueryBarChart           Category counts from parent props
+QueryBubbleChart        Intent clusters from parent props
+Sankey Diagram          Flow computed from filteredLogs in parent
+3D Scatter Modal        Data mapped from parent state
+BubbleChart2D (SVG)     Agent data from /api/superuser/realtime via parent — [PROP]
+_broadcasts list        In-memory server state — lost on restart  [MEM]
+_email_templates list   In-memory server state — lost on restart  [MEM]
+
+
+================================================================================
+  END OF ADMIN MAPPING
+================================================================================
+
+
+================================================================================
+  SECTION U: USER DASHBOARD — COMPLETE DATABASE MAPPING
+  Project: VoiceAIcore  |  Generated: 2026-04-20
+  Routes: /user/* (role = 'user')
+  Layout: AppShell.jsx → Sidebar + <Outlet />
+================================================================================
+
+Legend:
+  [DB]     = Directly connected to database (SQL query in backend)
+  [MEM]    = In-memory only (lost on server restart)
+  [WS]     = WebSocket real-time stream (no DB query in frontend)
+  [PROP]   = Data passed via props from parent (no direct API call)
+  [NONE]   = Not connected to DB
+  [STUB]   = Endpoint exists but returns hardcoded/placeholder data
+  [EXT]    = External service (Exotel SIP, LiveKit cloud, browser ASR)
+
+================================================================================
+  U1. AUTHENTICATION — Login / Register / Session
+  Pages: Login.jsx, Register.jsx
+  Context: AuthContext.jsx
+================================================================================
+
+COMPONENT        : Login — Email + Password form
+FEATURE          : Authenticate user and receive JWT
+API ENDPOINT     : POST /api/login
+TABLE            : users
+COLUMNS          : email, password (hashed compare), role, id, name
+RESPONSE         : { token (JWT), user: { id, email, name, role } }
+STORAGE          : sessionStorage keys: 'token', 'user'
+STATUS           : [DB]
+
+COMPONENT        : Register — Signup form
+FEATURE          : Create new user account
+API ENDPOINT     : POST /api/register
+TABLE            : users
+COLUMNS          : email, name, password (hashed), role (default 'user'), created_at
+STATUS           : [DB]
+
+COMPONENT        : AuthContext — Session restore
+FEATURE          : Restore login state on page refresh
+API ENDPOINT     : None (reads sessionStorage)
+STATUS           : [NONE] — reads 'user' key from sessionStorage
+
+COMPONENT        : ProtectedRoute
+FEATURE          : Block non-user roles from /user/* routes
+API ENDPOINT     : None
+STATUS           : [NONE] — checks user.role in context
+
+COMPONENT        : AppShell — Request interceptor (api.js)
+FEATURE          : Auto-inject Bearer token on every API call
+API ENDPOINT     : All requests
+STATUS           : [NONE] — reads token from sessionStorage; 401 → clears token + redirects /login
+
+COMPONENT        : AppShell — Response interceptor (api.js)
+FEATURE          : Handle 401 Unauthorized globally
+STATUS           : [NONE] — client logic only
+
+
+================================================================================
+  U2. USER LANDING PAGE — Home Dashboard
+  Page: call-test/src/pages/user/HomePage.jsx
+  Route: /user (index)
+================================================================================
+
+--------------------------------------------------------------------------------
+U2.1 KPI STATS CARDS (top of landing page)
+--------------------------------------------------------------------------------
+
+COMPONENT        : HomePage — Total Calls (7d) card
+FEATURE          : Show count of user's calls in the last 7 days
+API ENDPOINT     : GET /api/home/stats
+TABLE            : cc_sessions
+COLUMNS          : id, created_at, caller_id
+SQL (expected)   : COUNT(*) FROM cc_sessions
+                   WHERE caller_id=$user_id AND created_at > NOW() - INTERVAL '7 days'
+POLLING          : 30s
+STATUS           : [DB] (endpoint may return stub if not fully implemented)
+
+COMPONENT        : HomePage — Avg Calls Per Day card
+FEATURE          : Average daily call volume for this user
+API ENDPOINT     : GET /api/home/stats
+TABLE            : cc_sessions
+COLUMNS          : created_at, caller_id
+SQL (expected)   : COUNT(*) / 7.0 aggregated over 7-day window
+POLLING          : 30s
+STATUS           : [DB]
+
+COMPONENT        : HomePage — Active Regions card
+FEATURE          : Number of distinct departments/regions user called
+API ENDPOINT     : GET /api/home/stats
+TABLE            : cc_sessions
+COLUMNS          : department, caller_id
+SQL (expected)   : COUNT(DISTINCT department) WHERE caller_id=$user_id
+POLLING          : 30s
+STATUS           : [STUB] — may return hardcoded value if not implemented
+
+--------------------------------------------------------------------------------
+U2.2 RECENT ACTIVITY PANEL
+--------------------------------------------------------------------------------
+
+COMPONENT        : HomePage — Recent Activity list (last 5 calls)
+FEATURE          : Show 5 most recent calls with status, dept, duration
+API ENDPOINT     : GET /api/home/recent-activity?limit=5
+TABLE            : cc_sessions, cc_callers
+COLUMNS          :
+  cc_sessions — session_id, status, department, call_duration, created_at, caller_id, agent_id
+  cc_callers  — email, display_name
+POLLING          : 30s
+STATUS           : [DB]
+
+COMPONENT        : HomePage — Activity row (direction indicator)
+FEATURE          : Show inbound/outbound direction of each call
+API ENDPOINT     : Same as above
+TABLE            : cc_sessions
+COLUMNS          : (direction column if present, else inferred from agent_id vs caller_id)
+STATUS           : [DB]
+
+--------------------------------------------------------------------------------
+U2.3 ACTION BUTTONS (landing page quick-launch)
+--------------------------------------------------------------------------------
+
+COMPONENT        : "Start a Call" button
+FEATURE          : Open UserBrowserCall modal
+API ENDPOINT     : None (opens modal via setShowCallWidget(true))
+STATUS           : [NONE]
+
+COMPONENT        : "IVR Builder" button
+FEATURE          : Open IVR builder modal
+API ENDPOINT     : None (opens modal via setShowIVRBuilder(true))
+STATUS           : [NONE]
+
+COMPONENT        : "View Call History" button
+FEATURE          : Navigate to /user/call-logs or scroll to HistoryPanel
+API ENDPOINT     : None (client-side navigation)
+STATUS           : [NONE]
+
+
+================================================================================
+  U3. LIVE BROWSER CALL PANEL
+  Component: call-test/src/components/UserDashboard/UserBrowserCall.jsx
+  Trigger: Modal from HomePage "Start a Call" button
+================================================================================
+
+--------------------------------------------------------------------------------
+U3.1 BUSINESS HOURS CHECK
+--------------------------------------------------------------------------------
+
+COMPONENT        : UserBrowserCall — Business hours gate
+FEATURE          : Check if support is open before allowing call initiation
+API ENDPOINT     : GET /api/cc/business-hours
+TABLE            : admin_config
+COLUMNS          : key (business_hours, holiday_active, holiday_message), value
+RESPONSE         : { is_holiday, holiday_message, work_start, work_end, work_days_names }
+STATUS           : [DB]
+TIMING           : On call button press (before connecting)
+
+--------------------------------------------------------------------------------
+U3.2 CALL INITIATION
+--------------------------------------------------------------------------------
+
+COMPONENT        : UserBrowserCall — Start Call button
+FEATURE          : Initiate WebRTC browser call, enqueue in dept queue
+API ENDPOINT     : POST /api/webrtc/calls/initiate
+TABLE            : cc_sessions, cc_callers
+COLUMNS WRITTEN  :
+  cc_callers  — email (UPSERT on conflict), display_name, last_seen
+  cc_sessions — session_id, room_id, caller_id (FK), department, status ('queued'),
+                created_at, agent_id (null initially), call_type ('browser')
+REQUEST BODY     : { caller_name, call_type: 'browser', department, user_email }
+RESPONSE         : { call_id, room_name, status: 'no_agents' | 'queued' | 'connected' }
+STATUS           : [DB]
+
+--------------------------------------------------------------------------------
+U3.3 LIVEKIT TOKEN — JOIN CALL ROOM
+--------------------------------------------------------------------------------
+
+COMPONENT        : UserBrowserCall — Join LiveKit room (after initiate)
+FEATURE          : Get JWT token to connect to LiveKit WebRTC room
+API ENDPOINT     : GET /api/webrtc/livekit/token
+TABLE            : N/A (token generated from LiveKit SDK, no DB write)
+QUERY PARAMS     : room, identity, name
+RESPONSE         : { token (JWT), livekit_url, room }
+STATUS           : [NONE] — LiveKit cloud token, no DB
+
+--------------------------------------------------------------------------------
+U3.4 QUEUE IVR — WAITING STATE
+--------------------------------------------------------------------------------
+
+COMPONENT        : UserBrowserCall — Queue waiting screen
+FEATURE          : Show queue position + play TTS audio while waiting
+DATA CHANNELS    :
+  tts_queue_audio — Binary WAV stream from backend (queue music / position announcement)
+  tts_queue_text  — JSON { text } queue position text
+TABLE            : cc_sessions (queue_position, wait_seconds updated by backend)
+COLUMNS          : session_id, queue_position, wait_seconds, status
+STATUS           : [WS] — LiveKit data channel (no frontend DB call; backend updates DB)
+COMPONENT QueueTTSReceiver handles audio playback
+
+--------------------------------------------------------------------------------
+U3.5 AI FALLBACK — LANGUAGE DETECTION
+--------------------------------------------------------------------------------
+
+COMPONENT        : UserBrowserCall — AI language picker (state: lang_pick)
+FEATURE          : When no agents online, detect user language via browser ASR
+API ENDPOINT     : None (browser SpeechRecognition API)
+TABLE            : N/A
+STATUS           : [EXT] — browser Web Speech API, no DB
+
+COMPONENT        : UserBrowserCall — AI call connect (after language detected)
+FEATURE          : Route to AI agent (Ollama LLM) in detected language
+API ENDPOINT     : GET /livekit/token?lang={lang}&llm=ollama
+TABLE            : N/A (LiveKit token only)
+STATUS           : [NONE] — no DB write for AI room join
+
+--------------------------------------------------------------------------------
+U3.6 CALL CANCEL
+--------------------------------------------------------------------------------
+
+COMPONENT        : UserBrowserCall — Cancel / End call button (waiting state)
+FEATURE          : Cancel pending call and remove from queue
+API ENDPOINT     : POST /api/webrtc/calls/cancel/{call_id}
+TABLE            : cc_sessions
+COLUMNS          : status (→ 'abandoned'), ended_at (NOW())
+STATUS           : [DB]
+
+--------------------------------------------------------------------------------
+U3.7 TRANSCRIPT SAVING (during active call)
+--------------------------------------------------------------------------------
+
+COMPONENT        : CallerTranscriptSender (inside LiveKitRoom)
+FEATURE          : Save user's ASR speech to transcripts table in real-time
+API ENDPOINT     : POST /api/webrtc/transcript/save
+TABLE            : transcripts
+COLUMNS WRITTEN  : session_id, speaker ('caller'), text (ASR result), sentiment, created_at
+STATUS           : [DB]
+TRIGGER          : Every time browser SpeechRecognition fires a result
+
+--------------------------------------------------------------------------------
+U3.8 CALL STATUS WATCHER
+--------------------------------------------------------------------------------
+
+COMPONENT        : CallStatusWatcher (inside LiveKitRoom)
+FEATURE          : Monitor call state changes (agent joins / call ends from agent side)
+DATA CHANNEL     : call_status LiveKit data channel
+STATUS           : [WS] — no frontend DB call; reacts to backend events
+
+--------------------------------------------------------------------------------
+U3.9 RECORDING CONSENT POPUP
+--------------------------------------------------------------------------------
+
+COMPONENT        : UserBrowserCall — Recording consent popup
+FEATURE          : Ask user permission to record the call (shown on call connect)
+API ENDPOINT     : POST /api/webrtc/recording/consent
+TABLE            : cc_sessions
+COLUMNS WRITTEN  : recording_consent ('admitted' | 'denied'), session_id
+REQUEST BODY     : { session_id, consent: 'admitted' | 'denied' }
+STATUS           : [DB]
+TIMING           : Appears when callState changes to 'active'
+AUTO-ADMIT       : 15-second countdown → auto-admits if no response
+
+
+================================================================================
+  U4. RECORDING CONTROLLER (Two-sided recording)
+  Component: RecordingController (inside LiveKitRoom in UserBrowserCall)
+  NOTE: This is the planned two-sided Web Audio API recording (from plan file)
+================================================================================
+
+COMPONENT        : RecordingController — Start recording
+FEATURE          : Mix local mic + remote agent audio via AudioContext, record to WebM
+API ENDPOINT     : None during recording (MediaRecorder runs client-side)
+TABLE            : N/A
+STATUS           : [NONE] — client-side Web Audio API
+
+COMPONENT        : RecordingController — Upload on call end
+FEATURE          : Upload recorded WebM blob to backend
+API ENDPOINT     : POST /api/webrtc/recording/upload
+QUERY PARAMS     : session_id, consent=admitted
+TABLE            : cc_sessions
+COLUMNS WRITTEN  : recording_url (path to saved file)
+REQUEST BODY     : FormData with file: {session_id}.webm
+STATUS           : [DB]
+TRIGGER          : On MediaRecorder.onstop (call ends or component unmounts)
+
+
+================================================================================
+  U5. CALLBACK NOTIFICATION
+  Component: call-test/src/components/UserDashboard/CallbackNotification.jsx
+  Trigger: Agent schedules outbound callback for this user
+================================================================================
+
+COMPONENT        : CallbackNotification — WebSocket listener
+FEATURE          : Listen for agent-initiated callback events via event hub
+API ENDPOINT     : WS /api/cc/ws/events
+TABLE            : N/A
+STATUS           : [WS] — real-time event stream
+EVENT TYPES      :
+  caller_pickup    → { user_email, room, department, outbound_id } — show popup
+  outbound_cancelled → { user_email } — dismiss popup
+
+COMPONENT        : CallbackNotification — Accept callback button
+FEATURE          : User accepts scheduled callback → joins LiveKit room
+API ENDPOINT     : GET /api/cc/outbound/caller-token?room={room}&user_email={email}
+TABLE            : outbound_queue, cc_callers
+COLUMNS          : outbound_queue.user_email, outbound_queue.status, cc_callers.email
+RESPONSE         : { token (LiveKit JWT), url }
+STATUS           : [DB]
+
+COMPONENT        : CallbackNotification — Decline callback button
+FEATURE          : User rejects callback → notifies backend to cancel
+API ENDPOINT     : POST /api/cc/outbound/user-reject
+TABLE            : outbound_queue, agent_states
+COLUMNS WRITTEN  : outbound_queue.status (→ 'rejected'), agent event dispatched
+REQUEST BODY     : { user_email, department }
+STATUS           : [DB]
+
+COMPONENT        : CallbackNotification — 20-second countdown
+FEATURE          : Auto-dismiss popup if user does not respond
+API ENDPOINT     : None
+STATUS           : [NONE] — JS setInterval countdown, no DB
+
+
+================================================================================
+  U6. DIRECT CALL FROM AGENT (AppShell.jsx)
+  Trigger: Agent initiates direct call to this user from agent dashboard
+================================================================================
+
+COMPONENT        : AppShell — User heartbeat (presence)
+FEATURE          : Mark user as online so agents can see reachability
+API ENDPOINT     : POST /api/cc/user/heartbeat
+TABLE            : (in-memory _user_http_heartbeats on server)
+REQUEST BODY     : { email }
+STATUS           : [MEM] — no DB write; tracked in-memory
+INTERVAL         : 30 seconds
+
+COMPONENT        : AppShell — WebSocket for direct calls
+FEATURE          : Listen for agent-initiated direct call events
+API ENDPOINT     : WS /api/cc/ws/events
+TABLE            : N/A
+STATUS           : [WS] — event hub
+EVENT TYPES      :
+  incoming_direct_call → { room, token, url, agent_name, agent_identity } — show popup
+  direct_call_cancelled → {} — dismiss popup
+
+COMPONENT        : AppShell — Accept direct call button
+FEATURE          : User accepts direct call from agent → open LiveKit overlay
+API ENDPOINT     : None (token already in WS event payload)
+TABLE            : N/A
+STATUS           : [NONE] — uses token from WS message directly
+
+COMPONENT        : AppShell — Decline direct call button
+FEATURE          : User rejects agent's direct call → notify backend
+API ENDPOINT     : POST /api/cc/outbound/direct-decline
+TABLE            : agent_states (event dispatched back to agent)
+COLUMNS          : agent_identity, caller_email
+REQUEST BODY     : { agent_identity, caller_email }
+STATUS           : [DB] / [WS] — triggers event in event_hub
+
+COMPONENT        : ActiveCallCard (inside LiveKitRoom in AppShell)
+FEATURE          : Mute / End call controls during active direct call
+API ENDPOINT     : None for mute (localParticipant.setMicrophoneEnabled)
+TABLE            : N/A
+STATUS           : [NONE] — LiveKit SDK client control
+NOTE             : End button → setActiveDirectCall(null) → disconnects LiveKit
+
+
+================================================================================
+  U7. DIALER PANEL (PSTN / Phone calls)
+  Component: call-test/src/components/UserDashboard/DialerPanel.jsx
+================================================================================
+
+COMPONENT        : DialerPanel — Phone number input + Dial button
+FEATURE          : Initiate outbound PSTN call via Exotel SIP trunk
+API ENDPOINT     : POST /api/calls  (via callApiService.apiStartCall)
+TABLE            : cc_sessions
+COLUMNS WRITTEN  : session_id, department, status ('connected'), created_at
+REQUEST BODY     : { dialNumber, department }
+STATUS           : [DB]
+
+COMPONENT        : DialerPanel — Exotel SIP initiation
+FEATURE          : Ring actual phone number via Exotel trunk
+API ENDPOINT     : POST /initiatePhoneCall  (callApiService.initiatePhoneCall)
+TABLE            : N/A — external Exotel API
+STATUS           : [EXT] — Exotel SIP, no DB write by frontend
+
+COMPONENT        : DialerPanel — LiveKit monitor join
+FEATURE          : Browser joins LiveKit to monitor PSTN call audio
+API ENDPOINT     : POST /token
+TABLE            : N/A (LiveKit token)
+STATUS           : [NONE] — token only, no DB
+
+COMPONENT        : DialerPanel — Dial pad buttons (0-9, *, #)
+FEATURE          : DTMF tone input display
+STATUS           : [NONE] — client UI only
+
+
+================================================================================
+  U8. CALL HISTORY PANEL
+  Component: call-test/src/components/IVR/HistoryPanel.jsx
+  Location: Embedded in HomePage AND at /user/call-logs
+================================================================================
+
+COMPONENT        : HistoryPanel — Call list table
+FEATURE          : Paginated list of all calls (inbound + outbound + direct)
+API ENDPOINT     : GET /api/calls?limit=50
+TABLE            : cc_sessions, cc_callers
+COLUMNS          :
+  cc_sessions — id, session_id, room_id, department, status, call_duration,
+                agent_id, created_at, ended_at, recording_url, recording_consent,
+                wait_seconds, csat
+  cc_callers  — email (as caller_number), display_name (as caller_name)
+POLLING          : 5s silent refresh
+STATUS           : [DB]
+
+COMPONENT        : HistoryPanel — Sentiment badge on each row
+FEATURE          : Show positive/negative/neutral sentiment for each call
+API ENDPOINT     : GET /api/calls?limit=50 (sentiment aggregated in same response)
+TABLE            : transcripts (aggregated server-side per session)
+COLUMNS          : session_id, sentiment (COUNT grouped)
+SQL              : Sentiment computed as:
+                   positive_count > negative_count → 'positive'
+                   negative_count > positive_count → 'negative'
+                   else → 'neutral'
+STATUS           : [DB]
+
+COMPONENT        : HistoryPanel — "View Transcript" button / Transcript modal
+FEATURE          : Open transcript viewer for a call
+API ENDPOINT     : GET /api/calls/{call_id}/transcript
+TABLE            : transcripts
+COLUMNS          : id, call_id, session_id, speaker, text, sentiment, created_at
+STATUS           : [DB] — fetched on modal open
+
+COMPONENT        : HistoryPanel — Recording audio player
+FEATURE          : Play call recording inline
+API ENDPOINT     : (recording_url from the call row, served as file stream)
+TABLE            : cc_sessions
+COLUMNS          : recording_url, recording_consent
+STATUS           : [DB] — URL resolved from cc_sessions.recording_url
+
+COMPONENT        : HistoryPanel — Delete call button
+FEATURE          : Remove call record permanently
+API ENDPOINT     : DELETE /api/calls/{call_id}
+TABLE            : cc_sessions
+COLUMNS          : id
+STATUS           : [DB]
+
+COMPONENT        : HistoryPanel — Search bar
+FEATURE          : Client-side text search filter
+FILTERS ON       : caller_number, caller_name, agent_name, department, status, sentiment
+STATUS           : [NONE] — filters local state array, no API call
+
+COMPONENT        : HistoryPanel — Date range picker
+FEATURE          : Filter calls by date range (ONLY panel that keeps date filter)
+FILTERS ON       : created_at
+STATUS           : [NONE] — client-side filter on local state
+NOTE             : Date filter intentionally kept in HistoryPanel; removed from all other UI
+
+
+================================================================================
+  U9. ANALYTICS PAGE
+  Page: call-test/src/pages/user/AnalyticsPage.jsx
+  Route: /user/analytics
+================================================================================
+
+COMPONENT        : AnalyticsPage — Call volume chart
+FEATURE          : Line or bar chart of daily call count
+API ENDPOINT     : GET /api/home/stats  or  GET /api/agent/call-stats (TBD)
+TABLE            : cc_sessions
+COLUMNS          : created_at (DATE grouped), call_duration, status, caller_id
+STATUS           : [DB]
+
+COMPONENT        : AnalyticsPage — Sentiment trend chart
+FEATURE          : Sentiment over time visualization
+API ENDPOINT     : (likely same stats endpoint)
+TABLE            : transcripts, call_summaries
+COLUMNS          : sentiment, created_at, session_id
+STATUS           : [DB]
+
+COMPONENT        : AnalyticsPage — Department breakdown
+FEATURE          : Calls per department (pie/bar)
+TABLE            : cc_sessions
+COLUMNS          : department, caller_id, COUNT(*)
+STATUS           : [DB]
+
+NOTE             : AnalyticsPage full implementation may be partial / stub.
+                   Endpoints may fall back to GET /api/home/stats or /api/calls.
+
+
+================================================================================
+  U10. SIDEBAR NAVIGATION
+  Component: call-test/src/layout/Sidebar.jsx
+================================================================================
+
+COMPONENT        : Sidebar — User nav menu
+FEATURE          : Navigate between user pages
+STATUS           : [NONE] — client-side routing, no API call
+
+SIDEBAR LINKS (implemented — active routes):
+  home          → /user             (HomePage)
+  aiAgents      → /user/ai-agents   (stub page)
+  analytics     → /user/analytics   (AnalyticsPage)
+  callLogs      → /user/call-logs   (HistoryPanel full page)
+  sendCall      → /user/send-call   (stub page)
+  pathways      → /user/pathways    (stub page)
+  batches       → /user/batches     (stub page)
+  tools         → /user/tools       (stub page)
+  billing       → /user/billing     (stub page)
+  voices        → /user/voices      (stub page)
+  personas      → /user/personas    (stub page)
+  knowledgeBases→ /user/knowledge-bases (stub page)
+  webWidget     → /user/web-widget  (stub page)
+
+SIDEBAR LINKS (NOT implemented — dimmed 38% opacity):
+  automations, phoneNumbers, sms, compliance, addOns, documentation
+STATUS           : [NONE] — UI only, routes may 404 or show empty page
+
+
+================================================================================
+  U11. APPSHELL — LAYOUT WRAPPER
+  Component: call-test/src/layout/AppShell.jsx
+================================================================================
+
+COMPONENT        : AppShell — Sidebar render
+FEATURE          : Persistent left navigation (250px)
+STATUS           : [NONE] — layout only
+
+COMPONENT        : AppShell — <Outlet /> render
+FEATURE          : Render active child route content
+STATUS           : [NONE] — React Router outlet
+
+COMPONENT        : AppShell — GlobalStyles injection
+FEATURE          : CSS variables (--bg, --txt, --bdr, etc.) for theming
+STATUS           : [NONE]
+
+COMPONENT        : AppShell — User heartbeat useEffect
+FEATURE          : POST /api/cc/user/heartbeat every 30s to mark user online
+API ENDPOINT     : POST /api/cc/user/heartbeat
+TABLE            : In-memory _user_http_heartbeats
+STATUS           : [MEM] — no DB; presence tracked in server memory
+INTERVAL         : 30 seconds; fires immediately on mount
+
+COMPONENT        : AppShell — WS useEffect (direct call listener)
+FEATURE          : Persistent WebSocket to event hub; reconnects every 5s on close
+API ENDPOINT     : WS /api/cc/ws/events
+TABLE            : N/A
+STATUS           : [WS]
+REGISTRATION     : ws.send({ type: 'user_register', email })
+RECONNECT        : setTimeout(connect, 5000) on ws.onclose
+
+
+================================================================================
+  U12. COMPLETE POLLING & REAL-TIME REFERENCE — USER SPACE
+================================================================================
+
+COMPONENT / FEATURE                  INTERVAL      ENDPOINT / MECHANISM
+------------------------------------ ------------- --------------------------------
+HomePage stats + activity            30 seconds    GET /api/home/stats
+                                                   GET /api/home/recent-activity
+HistoryPanel call list               5 seconds     GET /api/calls?limit=50
+AppShell user heartbeat              30 seconds    POST /api/cc/user/heartbeat
+AppShell direct call listener        Real-time WS  WS /api/cc/ws/events
+CallbackNotification listener        Real-time WS  WS /api/cc/ws/events
+CallStatusWatcher (in LiveKitRoom)   Real-time     LiveKit data channel 'call_status'
+QueueTTSReceiver (in LiveKitRoom)    Real-time     LiveKit data channels tts_queue_audio,
+                                                                        tts_queue_text
+CallerTranscriptSender               On speech     POST /api/webrtc/transcript/save
+Business hours check                 On call press GET /api/cc/business-hours
+
+
+================================================================================
+  U13. DATABASE TABLE REFERENCE — USER SPACE
+================================================================================
+
+TABLE: users
+  Purpose  : User account (login, role, credits)
+  Columns  : id, name, email, password, role, is_active, phone_number, created_at, credits
+  Used by  : Login, Register, AuthContext (JWT validation)
+
+TABLE: cc_sessions
+  Purpose  : Every call record (browser, PSTN, direct, outbound)
+  Columns  : id, session_id, room_id, caller_id (FK→cc_callers), department,
+             status, call_duration, agent_id, created_at, ended_at,
+             recording_url, recording_consent, wait_seconds, csat,
+             queue_position, call_type
+  Used by  : HistoryPanel, UserBrowserCall, RecordingController, DialerPanel,
+             CallbackNotification
+  Key statuses: queued, connected, ended, abandoned, transferred, completed
+
+TABLE: cc_callers
+  Purpose  : Caller / user identity (email → display_name)
+  Columns  : id, email (UNIQUE), display_name, last_seen
+  Used by  : HistoryPanel (caller_name), UserBrowserCall (initiate → UPSERT),
+             CallbackNotification (token fetch)
+
+TABLE: transcripts
+  Purpose  : Per-utterance speech during call (ASR output)
+  Columns  : id, call_id, session_id, speaker, text, sentiment, created_at
+  Used by  : HistoryPanel (transcript modal + sentiment badge),
+             CallerTranscriptSender (writes in real-time during call)
+
+TABLE: call_summaries
+  Purpose  : Post-call AI-generated summary and aggregated sentiment
+  Columns  : session_id (UNIQUE), call_id, num_speakers, speakers (JSON),
+             avg_sentiment, sentiment_label, total_turns, duration_secs
+  Used by  : HistoryPanel (sentiment indirectly), generated on call end by backend
+
+TABLE: outbound_queue
+  Purpose  : Scheduled callback jobs (agent schedules → user gets notified)
+  Columns  : id, user_email, department, status, assigned_agent, attempts,
+             created_at, last_attempt, scheduler_email_sent
+  Used by  : CallbackNotification (accept/reject), AppShell (direct-decline)
+
+TABLE: admin_config
+  Purpose  : Key-value system configuration
+  Columns  : key, value
+  Key rows : business_hours, holiday_active, holiday_message
+  Used by  : UserBrowserCall (GET /api/cc/business-hours before initiating call)
+
+
+================================================================================
+  U14. COMPONENTS NOT CONNECTED TO DATABASE — USER SPACE
+================================================================================
+
+COMPONENT                       REASON
+------------------------------- -----------------------------------------------
+"Start a Call" button           [NONE] — opens modal via state, no API
+"IVR Builder" button            [NONE] — opens modal via state, no API
+"View Call History" button      [NONE] — client-side scroll/nav, no API
+Date range picker (HistoryPanel)[NONE] — client-side filter on local array
+Search bar (HistoryPanel)       [NONE] — client-side filter on local array
+Sidebar nav links               [NONE] — React Router, no API
+Dial pad buttons (0-9, *, #)   [NONE] — UI display only
+20-second countdown (Callback)  [NONE] — JS setInterval, no DB
+ActiveCallCard mute button      [NONE] — LiveKit SDK setMicrophoneEnabled
+ActiveCallCard end button       [NONE] — setActiveDirectCall(null) disconnect
+Language picker (AI fallback)   [NONE] — browser SpeechRecognition API
+QueueTTSReceiver audio player   [NONE] — plays binary WAV from LiveKit channel
+CallStatusWatcher               [NONE] — reacts to LiveKit data channel event
+Stub pages (billing, tools etc) [NONE] — not yet implemented, no API calls
+AppShell <Outlet />             [NONE] — layout only
+GlobalStyles                    [NONE] — CSS only
+User heartbeat (MEM)            [MEM]  — server in-memory, no DB write
+Exotel SIP dial                 [EXT]  — external SIP trunk, no frontend DB call
+LiveKit token fetches           [NONE] — token generation, no DB query
+
+
+================================================================================
+  END OF USER DASHBOARD MAPPING
+================================================================================

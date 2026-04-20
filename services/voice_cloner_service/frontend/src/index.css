@@ -1,0 +1,128 @@
+/* ── Reset ─────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* ── Obsidian Gold Design Tokens ───────────────────────────── */
+:root {
+  --bg-base:      #0b0b0e;
+  --bg-surface:   #111115;
+  --bg-elevated:  #18181e;
+  --gold:         #d4a853;
+  --gold-bright:  #f0c36b;
+  --gold-dim:     rgba(212,168,83,0.18);
+  --gold-glow:    rgba(212,168,83,0.10);
+  --text-primary: #f0ece3;
+  --text-secondary: rgba(240,236,227,0.55);
+  --text-muted:   rgba(240,236,227,0.30);
+  --border:       rgba(212,168,83,0.12);
+  --border-focus: rgba(212,168,83,0.45);
+  --error:        #f0503c;
+  --success:      #3ec97a;
+  --r-sm:    6px;
+  --r-md:    10px;
+  --r-lg:    16px;
+  --r-xl:    22px;
+  --t-fast:  0.15s ease;
+  --t-med:   0.25s ease;
+  --font: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+html, body, #root {
+  height: 100%;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font);
+  font-size: 13px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Ambient aurora ─────────────────────────────────────────── */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 60% 40% at 15% 10%,  rgba(212,168,83,0.06)  0%, transparent 60%),
+    radial-gradient(ellipse 50% 35% at 85% 90%,  rgba(120,80,200,0.05)  0%, transparent 60%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── Scrollbar ──────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(212,168,83,0.18); border-radius: 4px; }
+
+/* ── Keyframes ──────────────────────────────────────────────── */
+@keyframes spin       { to { transform: rotate(360deg); } }
+@keyframes fadeIn     { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes pulse-ring {
+  0%   { box-shadow: 0 0 0 0   rgba(212,168,83,0.35); }
+  70%  { box-shadow: 0 0 0 8px rgba(212,168,83,0); }
+  100% { box-shadow: 0 0 0 0   rgba(212,168,83,0); }
+}
+@keyframes wave {
+  0%,100% { transform: scaleY(0.4); }
+  50%      { transform: scaleY(1.0); }
+}
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+
+/* ── Glass card ─────────────────────────────────────────────── */
+.glass {
+  background: rgba(255,255,255,0.03);
+  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  border: 1px solid var(--border);
+  border-radius: var(--r-xl);
+}
+
+/* ── Input / textarea base ──────────────────────────────────── */
+input, textarea, select {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: var(--r-md);
+  color: var(--text-primary);
+  font-family: var(--font);
+  font-size: 13px;
+  padding: 9px 13px;
+  outline: none;
+  transition: border-color var(--t-fast), box-shadow var(--t-fast);
+  width: 100%;
+}
+input:focus, textarea:focus, select:focus {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px rgba(212,168,83,0.08);
+}
+input::placeholder, textarea::placeholder { color: var(--text-muted); }
+
+/* ── Range slider ───────────────────────────────────────────── */
+input[type=range] {
+  -webkit-appearance: none;
+  padding: 0;
+  height: 4px;
+  background: rgba(255,255,255,0.08);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: var(--gold);
+  box-shadow: 0 0 6px rgba(212,168,83,0.5);
+  cursor: pointer;
+  transition: transform var(--t-fast);
+}
+input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+
+/* ── Audio player override ──────────────────────────────────── */
+audio {
+  width: 100%;
+  height: 36px;
+  border-radius: var(--r-md);
+  filter: invert(1) hue-rotate(180deg) brightness(0.85);
+}

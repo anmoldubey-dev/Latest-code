@@ -1,0 +1,994 @@
+================================================================================
+  AGENT & SUPERUSER DASHBOARD — COMPLETE DATABASE MAPPING
+  Project: VoiceAIcore  |  Generated: 2026-04-20
+================================================================================
+
+Legend:
+  [DB]     = Directly connected to database (SQL query in backend)
+  [MEM]    = In-memory only (lost on server restart)
+  [WS]     = WebSocket (real-time event stream, no DB)
+  [PROP]   = Data passed via props from parent (no direct API call)
+  [NONE]   = Not connected to DB
+  [STUB]   = Endpoint exists but returns hardcoded/empty data
+
+================================================================================
+  SECTION A: AGENT DASHBOARD
+  Entry: AgentPage.jsx
+  Core hook: useAgentDashboard.js
+  Components: call-test/src/components/agentDashboard/
+================================================================================
+
+--------------------------------------------------------------------------------
+A1. AGENT PROFILE / HEADER SECTION
+    Component: Header.jsx
+    Feature: Show agent name, department, date, Avg CSAT KPI card
+--------------------------------------------------------------------------------
+
+COMPONENT        : Header — Agent Name + Department display
+FEATURE          : Display agent identity
+API ENDPOINT     : GET /api/agent/profile
+TABLE            : agent_states
+COLUMNS          : agent_name, department, status
+POLLING          : One-time on mount
+STATUS           : [DB]
+
+COMPONENT        : Header — Avg CSAT KPI card
+FEATURE          : Show average customer satisfaction score
+API ENDPOINT     : GET /api/agent/csat
+TABLE            : cc_sessions
+COLUMNS          : agent_id, status (filtered WHERE status='ended')
+POLLING          : 30s (part of useAgentDashboard cycle)
+STATUS           : [DB]
+NOTE             : csat column not always present; score computed from ended call count
+
+COMPONENT        : Header — Date display
+FEATURE          : Show current date (weekday, month, day)
+API ENDPOINT     : None
+STATUS           : [NONE] — JS Date(), no DB
+
+COMPONENT        : Header — Tab navigation (Overview / Calls / Analytics / Settings)
+FEATURE          : Switch active tab
+API ENDPOINT     : None
+STATUS           : [NONE] — local useState only
+
+--------------------------------------------------------------------------------
+A2. OVERVIEW TAB
+    Component: Tabs.jsx → OverviewTab()
+    Charts: Charts.jsx
+--------------------------------------------------------------------------------
+
+COMPONENT        : OverviewTab — DailyLine chart
+FEATURE          : Line chart of daily call volume + avg duration over 30 days
+API ENDPOINT     : GET /api/agent/call-stats
+TABLE            : cc_sessions
+COLUMNS          : created_at (DATE grouped), call_duration, agent_id
+SQL              : SELECT DATE(created_at) as day, COUNT(*) as calls,
+                     COALESCE(AVG(call_duration),0) as avg_duration
+                   FROM cc_sessions WHERE agent_id=$1
+                   GROUP BY DATE(created_at) ORDER BY day DESC LIMIT 30
+POLLING          : 30s
+STATUS           : [DB]
+
+COMPONENT        : OverviewTab — HourlyHeat chart
+FEATURE          : Heatmap of call volume by hour of day
+API ENDPOINT     : GET /api/agent/call-stats
+TABLE            : cc_sessions
+COLUMNS          : created_at (EXTRACT HOUR), agent_id
+SQL              : SELECT EXTRACT(HOUR FROM created_at)::int as hour, COUNT(*) as calls
+                   FROM cc_sessions WHERE agent_id=$1 GROUP BY hour ORDER BY hour
+POLLING          : 30s
+STATUS           : [DB]
+
+COMPONENT        : OverviewTab — StatusPie chart
+FEATURE          : Donut chart of call status distribution
+API ENDPOINT     : GET /api/agent/call-stats
+TABLE            : cc_sessions
+COLUMNS          : status, agent_id
+SQL              : SELECT status, COUNT(*) as cnt FROM cc_sessions
+                   WHERE agent_id=$1 GROUP BY status
+POLLING          : 30s
+STATUS           : [DB]
+
+COMPONENT        : OverviewTab — SentimentPie chart
+FEATURE          : Donut chart of sentiment distribution (positive/negative/neutral)
+API ENDPOINT     : GET /api/agent/call-stats
+TABLE            : cc_sessions
+COLUMNS          : agent_id, status (sentimentBreakdown field in response)
+POLLING          : 30s
+STATUS           : [DB] (field may be empty if no sentiment stored)
+
+COMPONENT        : OverviewTab — CategoryBubble chart
+FEATURE          : Bubble chart of call volume per department/category
+API ENDPOINT     : GET /api/agent/call-stats
+TABLE            : cc_sessions
+COLUMNS          : department (as category), agent_id
+SQL              : SELECT department as category, COUNT(*) as cnt
+                   FROM cc_sessions WHERE agent_id=$1 GROUP BY department
+POLLING          : 30s
+STATUS           : [DB]
+
+COMPONENT        : OverviewTab — SankeyChart
+FEATURE          : Sankey flow diagram (department → status → outcome)
+API ENDPOINT     : GET /api/agent/call-stats
+TABLE            : cc_sessions
+COLUMNS          : department, status, agent_id (sankeyRaw field in response)
+POLLING          : 30s
+STATUS           : [DB]
+
+--------------------------------------------------------------------------------
+A3. CALLS TAB
+    Component: Tabs.jsx → CallsTab()
+    Sub-component: CallTable.jsx
+--------------------------------------------------------------------------------
+
+COMPONENT        : CallsTab — Full call list
+FEATURE          : Table of all calls handled by agent (no date filter)
+API ENDPOINT     : GET /api/agent/calls
+TABLE            : cc_sessions, cc_callers
+COLUMNS          :
+  cc_sessions — session_id, department, status, call_duration, created_at, caller_id, agent_id
+  cc_callers  — email (as caller_email), display_name (as caller_name)
+SQL              : SELECT s.session_id, s.department, s.status, s.call_duration,
+                     s.created_at, c.email as caller_email, c.display_name as caller_name
+                   FROM cc_sessions s LEFT JOIN cc_callers c ON c.id=s.caller_id
+                   WHERE s.agent_id=$1 ORDER BY s.created_at DESC LIMIT 100
+POLLING          : 30s
+STATUS           : [DB]
+NOTE             : Date filter removed — shows all calls
+
+COMPONENT        : CallTable — Transcript modal (CallModal)
+FEATURE          : View individual call transcript on row click
+API ENDPOINT     : GET /api/calls/{callId}/transcript
+TABLE            : transcripts
+COLUMNS          : id, call_id, session_id, speaker, text, sentiment, created_at
+STATUS           : [DB]
+
+--------------------------------------------------------------------------------
+A4. ANALYTICS TAB
+    Component: Tabs.jsx → AnalyticsTab()
+--------------------------------------------------------------------------------
+
+COMPONENT        : AnalyticsTab — DailyLine, SankeyChart, HourlyHeat,
+                   StatusPie, SentimentPie, CategoryBubble
+FEATURE          : Deep-dive analytics (same data, different layout)
+API ENDPOINT     : GET /api/agent/call-stats  (same as OverviewTab)
+TABLE            : cc_sessions
+COLUMNS          : Same as OverviewTab section above
+POLLING          : 30s
+STATUS           : [DB]
+
+--------------------------------------------------------------------------------
+A5. SETTINGS TAB
+    Component: Tabs.jsx → SettingsTab()
+--------------------------------------------------------------------------------
+
+COMPONENT        : SettingsTab — Agent Profile card
+FEATURE          : Display agent profile metadata (read-only diagnostic view)
+API ENDPOINT     : GET /api/agent/profile
+TABLE            : agent_states
+COLUMNS          : agent_name, department, status, last_heartbeat
+FIELDS SHOWN     : Name, Email, Phone, Country, Model Variant, Skill Level,
+                   Risk Level, Avg Latency, Workload, Hallucination Rate,
+                   Member Since, Status
+POLLING          : One-time on mount
+STATUS           : [DB] — some fields (phone, country, model variant, skill level,
+                   riskLevel, avgLatencyMs, workload, hallucinationRate, memberSince)
+                   may not exist in agent_states and show "—"
+
+--------------------------------------------------------------------------------
+A6. INCOMING CALL NOTIFICATION
+    Component: IncomingCallNotification.jsx
+--------------------------------------------------------------------------------
+
+COMPONENT        : IncomingCallNotification — Call popup overlay
+FEATURE          : Show ringing popup when a caller is dispatched to this agent
+API ENDPOINT     : WS /api/webrtc/ws/{agentId}?department={dept}
+TABLE            : N/A
+STATUS           : [WS] — real-time WebSocket signaling; no DB query in frontend
+NOTE             : Backend dispatches event from cc_sessions queue logic
+
+COMPONENT        : IncomingCallNotification — Accept button
+FEATURE          : Agent accepts incoming call; creates LiveKit room session
+API ENDPOINT     : POST /api/webrtc/calls/accept/{callId}?agent_id={id}
+TABLE            : cc_sessions, agent_states
+COLUMNS UPDATED  : cc_sessions.status → 'connected'; agent_states.status → 'busy'
+STATUS           : [DB]
+
+COMPONENT        : IncomingCallNotification — Decline button
+FEATURE          : Agent declines incoming call
+API ENDPOINT     : (handled via WS or cc/agent/offline)
+STATUS           : [DB] / [WS]
+
+--------------------------------------------------------------------------------
+A7. OUTBOUND CALLBACK NOTIFICATION
+    Component: OutboundCallNotification.jsx
+--------------------------------------------------------------------------------
+
+COMPONENT        : OutboundCallNotification — Callback popup overlay
+FEATURE          : Show callback assignment when outbound is dispatched
+API ENDPOINT     : WS /api/cc/ws/events  (event type: outbound_callback)
+TABLE            : N/A
+STATUS           : [WS]
+
+COMPONENT        : OutboundCallNotification — Accept button
+FEATURE          : Agent accepts outbound callback; starts LiveKit session
+API ENDPOINT     : POST /api/cc/outbound/accept
+TABLE            : outbound_queue, agent_states
+COLUMNS          :
+  outbound_queue — id, status (→ 'in_progress'), assigned_agent, user_email, department
+  agent_states   — status (→ 'busy'), last_heartbeat
+STATUS           : [DB]
+
+COMPONENT        : OutboundCallNotification — Decline / Snooze button
+FEATURE          : Agent snoozes outbounds for N minutes
+API ENDPOINT     : POST /api/cc/outbound/decline
+TABLE            : agent_states
+COLUMNS          : ignore_outbounds_until (TIMESTAMP), ignore_reason (TEXT)
+STATUS           : [DB]
+
+COMPONENT        : OutboundCallNotification — Resume button
+FEATURE          : Agent resumes accepting outbounds after snooze
+API ENDPOINT     : POST /api/cc/outbound/resume
+TABLE            : agent_states
+COLUMNS          : status, ignore_outbounds_until, ignore_reason, last_heartbeat
+STATUS           : [DB]
+
+COMPONENT        : OutboundCallNotification — Complete button
+FEATURE          : Mark outbound callback as completed
+API ENDPOINT     : POST /api/cc/outbound/complete
+TABLE            : outbound_queue, agent_states
+COLUMNS          : outbound_queue.status → 'completed'; agent_states.status → 'free'
+STATUS           : [DB]
+
+COMPONENT        : OutboundCallNotification — No Answer button
+FEATURE          : Mark callback as no-answer; triggers retry + email fallback
+API ENDPOINT     : POST /api/cc/outbound/no-answer
+TABLE            : outbound_queue, agent_states
+COLUMNS          : outbound_queue.status, attempts (incremented), last_attempt
+STATUS           : [DB]
+
+--------------------------------------------------------------------------------
+A8. QUEUE MONITOR
+    Component: QueueMonitor.jsx
+--------------------------------------------------------------------------------
+
+COMPONENT        : QueueMonitor — WaitList panel
+FEATURE          : Show callers waiting in queue per department
+API ENDPOINT     : GET /api/cc/queue?department={dept}
+TABLE            : cc_sessions (via queue_engine in-memory, backed by DB)
+COLUMNS          : session_id, caller_id, department, status (= 'queued'), queue_position
+POLLING          : 3s
+STATUS           : [DB] (queue_engine reads cc_sessions for queued rows)
+
+COMPONENT        : QueueMonitor — Active Agents panel
+FEATURE          : Show which agents are online/busy in each department
+API ENDPOINT     : GET /api/cc/agents/status
+TABLE            : agent_states
+COLUMNS          : agent_identity, agent_name, department, status
+POLLING          : 5s
+STATUS           : [DB]
+
+--------------------------------------------------------------------------------
+A9. AGENT HEARTBEAT (background, no UI)
+--------------------------------------------------------------------------------
+
+COMPONENT        : AgentPage / useEffect — heartbeat
+FEATURE          : Keep agent presence alive (marks agent 'online')
+API ENDPOINT     : POST /api/cc/agent/heartbeat
+TABLE            : agent_states
+COLUMNS          : last_heartbeat (NOW()), status
+INTERVAL         : Every 30s
+STATUS           : [DB]
+
+COMPONENT        : AgentPage — Go Online button
+FEATURE          : Register agent in system and start receiving calls
+API ENDPOINT     : POST /api/cc/agent/online
+TABLE            : agent_states
+COLUMNS          : agent_identity, agent_name, department, status (→ 'online')
+STATUS           : [DB]
+
+COMPONENT        : AgentPage — Go Offline button
+FEATURE          : Deregister agent from call routing
+API ENDPOINT     : POST /api/cc/agent/offline
+TABLE            : agent_states
+COLUMNS          : status (→ 'offline')
+STATUS           : [DB]
+
+COMPONENT        : AgentPage — End Call button
+FEATURE          : Agent ends active call
+API ENDPOINT     : POST /api/cc/agent/end-call
+TABLE            : cc_sessions, agent_states, outbound_queue
+COLUMNS          :
+  cc_sessions   — status (→ 'completed'), call_duration (computed), ended_at (NOW())
+  agent_states  — status (→ 'free')
+  outbound_queue— status (→ 'completed') if outbound call
+STATUS           : [DB]
+
+--------------------------------------------------------------------------------
+A10. PUSH NOTIFICATIONS (background)
+     Component/Hook: usePushNotifications.js
+--------------------------------------------------------------------------------
+
+COMPONENT        : usePushNotifications — VAPID key fetch
+FEATURE          : Get VAPID public key for browser push registration
+API ENDPOINT     : GET /api/webrtc/push/vapid-public-key
+TABLE            : N/A
+STATUS           : [NONE] — key is static config, no DB
+
+COMPONENT        : usePushNotifications — Register subscription
+FEATURE          : Subscribe browser to push notifications for this agent
+API ENDPOINT     : POST /api/webrtc/push/subscribe
+TABLE            : push_subscriptions (or similar)
+COLUMNS          : email, endpoint, p256dh key, auth key
+STATUS           : [DB] (assumed — stored to deliver pushes later)
+
+--------------------------------------------------------------------------------
+A11. COMPONENTS NOT CONNECTED TO DB — AGENT DASHBOARD
+--------------------------------------------------------------------------------
+
+COMPONENT               REASON
+DateRangePicker         (REMOVED) — date filter removed from agent Header
+Channel Filter buttons  (REMOVED) — Voice/Chat/Email filter removed
+KPIRow cards            [PROP] — renders stats.total, stats.resolved, stats.escalated
+                          which come from useAgentDashboard (which calls /api/agent/call-stats)
+IVRCard (Sidebar)       [STUB] — GET /api/agent/ivr-status returns hardcoded stub, no DB
+AgentSidebar nav items  [NONE] — tab switch buttons, no API call
+Chart axes / legends    [NONE] — rendered from chart data, no separate API
+
+
+================================================================================
+  SECTION B: SUPERUSER DASHBOARD
+  Entry: Dashboard.jsx, fulldashboard.jsx, SuperuserPage.jsx
+  Pages: call-test/src/pages/superuser/
+  Components: call-test/src/components/dashboard/
+================================================================================
+
+--------------------------------------------------------------------------------
+B1. SUPERUSER LANDING PAGE — KPI INFOGRAPHICS
+    Component: SuperuserPage.jsx / Dashboard.jsx
+    Sub-component: Infographics section in fulldashboard.jsx
+--------------------------------------------------------------------------------
+
+COMPONENT        : KPI Panel — Total Traffic card
+FEATURE          : Total calls in last 24h
+API ENDPOINT     : GET /api/stats
+TABLE            : cc_sessions
+COLUMNS          : status, created_at
+SQL              : COUNT(*) FROM cc_sessions WHERE created_at > NOW() - INTERVAL '24 hours'
+POLLING          : 5s
+STATUS           : [DB]
+
+COMPONENT        : KPI Panel — Completed Calls card
+FEATURE          : Calls with status='completed' in last 24h
+API ENDPOINT     : GET /api/stats
+TABLE            : cc_sessions
+COLUMNS          : status, created_at
+SQL              : COUNT(*) FILTER (WHERE status='completed') FROM cc_sessions
+POLLING          : 5s
+STATUS           : [DB]
+
+COMPONENT        : KPI Panel — Active Streams card
+FEATURE          : Calls with status='connected' right now
+API ENDPOINT     : GET /api/stats
+TABLE            : cc_sessions
+COLUMNS          : status, created_at
+SQL              : COUNT(*) FILTER (WHERE status='connected')
+POLLING          : 5s
+STATUS           : [DB]
+
+COMPONENT        : KPI Panel — Online Agents card
+FEATURE          : Agents with recent heartbeat (last 2 min)
+API ENDPOINT     : GET /api/stats
+TABLE            : agent_states
+COLUMNS          : status, last_heartbeat
+SQL              : COUNT(*) FROM agent_states
+                   WHERE status != 'offline' AND last_heartbeat > NOW() - INTERVAL '2 minutes'
+POLLING          : 5s
+STATUS           : [DB]
+
+COMPONENT        : KPI Panel — Global CSAT card
+FEATURE          : Average customer satisfaction score
+API ENDPOINT     : GET /api/stats
+TABLE            : cc_sessions
+COLUMNS          : csat, created_at (if csat column exists)
+POLLING          : 5s
+STATUS           : [DB] (may show — if csat column not populated)
+
+COMPONENT        : KPI Panel — Avg Wait Time card
+FEATURE          : Average caller wait time in last 24h
+API ENDPOINT     : GET /api/stats
+TABLE            : cc_sessions
+COLUMNS          : wait_seconds, created_at
+SQL              : AVG(wait_seconds) FILTER (WHERE wait_seconds > 0)
+POLLING          : 5s
+STATUS           : [DB]
+
+COMPONENT        : KPI Panel — Escalation Rate card
+FEATURE          : % of calls abandoned or transferred
+API ENDPOINT     : GET /api/stats
+TABLE            : cc_sessions
+COLUMNS          : status (abandoned, transferred), created_at
+POLLING          : 5s
+STATUS           : [DB]
+
+COMPONENT        : KPI Panel — Hardware Load card
+FEATURE          : Fake/placeholder system load metric
+API ENDPOINT     : GET /api/stats
+TABLE            : N/A
+STATUS           : [NONE] — hardcoded or computed from call count, not real CPU
+
+COMPONENT        : KPI Panel — Avg Sentiment card
+FEATURE          : Average sentiment score across recent calls
+API ENDPOINT     : GET /api/stats
+TABLE            : cc_sessions
+COLUMNS          : (sentiment field, if stored)
+STATUS           : [DB] (may be 0 if sentiment not stored in cc_sessions)
+
+--------------------------------------------------------------------------------
+B2. SUPERUSER DASHBOARD — AGENT PERFORMANCE MATRIX (BubbleChart2D)
+    Component: fulldashboard.jsx → BubbleChart2D (SVG)
+--------------------------------------------------------------------------------
+
+COMPONENT        : BubbleChart2D — Agent bubble chart
+FEATURE          : SVG scatter — X=calls handled, Y=CSAT, size=workload%, color=risk
+API ENDPOINT     : GET /api/superuser/realtime
+TABLE            : agent_states (primary), cc_sessions (via CTE)
+COLUMNS          :
+  agent_states  — agent_identity, agent_name, department, status, last_heartbeat, sequence_number
+  cc_sessions   — agent_id, status, created_at
+SQL (CTE)        :
+  WITH agg AS (
+    SELECT agent_id,
+           COUNT(*) FILTER (WHERE status='completed') AS calls_handled,
+           COUNT(*) FILTER (WHERE status IN ('abandoned','transferred')) AS escalations
+    FROM cc_sessions WHERE created_at > NOW() - INTERVAL '24 hours' AND agent_id != ''
+    GROUP BY agent_id
+  )
+  SELECT a.agent_identity, a.agent_name, a.department, a.status,
+         COALESCE(g.calls_handled, 0) AS calls_handled,
+         COALESCE(g.escalations, 0) AS escalations,
+         a.last_heartbeat
+  FROM agent_states a LEFT JOIN agg g ON g.agent_id = a.agent_identity
+  WHERE a.last_heartbeat > NOW() - INTERVAL '10 minutes'
+POLLING          : 5s
+STATUS           : [DB]
+NOTE             : calls_handled is NOT a column in agent_states — computed via CTE
+
+COMPONENT        : BubbleChart2D — Hover tooltip
+FEATURE          : Show agent name, calls, CSAT, workload on hover
+STATUS           : [PROP] — data already loaded in chart, no extra API call
+
+COMPONENT        : BubbleChart2D — Click → onAgentClick
+FEATURE          : Navigate to AgentDetail page on bubble click
+STATUS           : [PROP] — triggers parent handler
+
+COMPONENT        : "Enter 3D Analysis" button → Three.js modal
+FEATURE          : Open 3D WebGL scatter in modal (on-demand)
+API ENDPOINT     : None (uses same data already loaded)
+STATUS           : [PROP] — renders from parent state
+
+--------------------------------------------------------------------------------
+B3. SUPERUSER DASHBOARD — SANKEY FLOW CHART
+    Component: fulldashboard.jsx → SankeyChart / SankeyDiagram
+--------------------------------------------------------------------------------
+
+COMPONENT        : SankeyChart — Call flow diagram
+FEATURE          : Department → Agent → Outcome flow visualization
+API ENDPOINT     : GET /api/superuser/realtime  (same call as BubbleChart)
+TABLE            : cc_sessions
+COLUMNS          : department, agent_id, status, created_at
+SQL              : SELECT department, status, COUNT(*) as cnt FROM cc_sessions
+                   WHERE created_at > NOW() - INTERVAL '24 hours' AND department != ''
+                   GROUP BY department, status
+POLLING          : 5s (same fetch)
+STATUS           : [DB]
+
+--------------------------------------------------------------------------------
+B4. SUPERUSER DASHBOARD — REAL-TIME AGENT ROSTER
+    Component: Dashboard.jsx / Agents.jsx
+--------------------------------------------------------------------------------
+
+COMPONENT        : Agent Roster — Agent list/grid
+FEATURE          : Live status grid of all agents (online/busy/offline)
+API ENDPOINT     : GET /api/superuser/realtime
+TABLE            : agent_states
+COLUMNS          : agent_identity, agent_name, department, status, last_heartbeat
+POLLING          : 5s
+STATUS           : [DB]
+
+COMPONENT        : Agent Roster — Department filter
+FEATURE          : Filter agents by department
+STATUS           : [NONE] — client-side filter on loaded data, no extra API
+
+COMPONENT        : Agent Roster — "View" button per agent
+FEATURE          : Navigate to AgentDetail page
+API ENDPOINT     : None (client-side navigate)
+STATUS           : [NONE]
+
+--------------------------------------------------------------------------------
+B5. SUPERUSER DASHBOARD — AGENT DETAIL PAGE
+    Component: AgentDetail.jsx
+    Route: /superuser/agents/{agent_id}
+--------------------------------------------------------------------------------
+
+COMPONENT        : AgentDetail — Agent profile card
+FEATURE          : Show agent name, model, CSAT, risk, status, department
+API ENDPOINT     : GET /api/superuser/agents/{agent_id}
+TABLE            : agent_states
+COLUMNS          : agent_identity, agent_name, department, status, last_heartbeat
+POLLING          : One-time on mount
+STATUS           : [DB]
+
+COMPONENT        : AgentDetail — Call log table
+FEATURE          : All recent calls handled by this agent (last 50)
+API ENDPOINT     : GET /api/superuser/agents/{agent_id}
+TABLE            : cc_sessions, cc_callers
+COLUMNS          :
+  cc_sessions  — id, session_id, department, status, wait_seconds, call_duration,
+                  created_at, recording_url, recording_consent
+  cc_callers   — email (caller_email), display_name (caller_name)
+SQL              : SELECT s.id, s.session_id, s.department, s.status, s.wait_seconds,
+                     s.call_duration, s.created_at, s.recording_url, s.recording_consent,
+                     c.email AS caller_email, c.display_name AS caller_name
+                   FROM cc_sessions s LEFT JOIN cc_callers c ON c.id = s.caller_id
+                   WHERE s.agent_id = $1 ORDER BY s.created_at DESC LIMIT 50
+POLLING          : One-time
+STATUS           : [DB]
+
+COMPONENT        : AgentDetail — Department breakdown bar chart
+FEATURE          : Calls per department for this agent (last 24h)
+API ENDPOINT     : GET /api/superuser/agents/{agent_id}
+TABLE            : cc_sessions
+COLUMNS          : department, agent_id, created_at, COUNT(*)
+SQL              : SELECT department, COUNT(*) AS cnt FROM cc_sessions
+                   WHERE agent_id=$1 AND created_at > NOW() - INTERVAL '24 hours'
+                   GROUP BY department ORDER BY cnt DESC
+POLLING          : One-time
+STATUS           : [DB]
+
+COMPONENT        : AgentDetail — Recording player
+FEATURE          : Play call recording audio inline
+API ENDPOINT     : /calls/{callId}/recording  (audio stream)
+TABLE            : cc_sessions
+COLUMNS          : recording_url, recording_consent
+STATUS           : [DB]
+
+--------------------------------------------------------------------------------
+B6. SUPERUSER DASHBOARD — CALL ANALYTICS PAGE
+    Component: CallAnalytics.jsx
+--------------------------------------------------------------------------------
+
+COMPONENT        : CallAnalytics — 3D bubble/scatter chart (Three.js)
+FEATURE          : 3D visualization of call volume, duration, escalations by dept
+API ENDPOINT     : GET /api/call-stats
+TABLE            : cc_sessions
+COLUMNS          : department (as category), status, call_duration, created_at
+SQL              : SELECT COALESCE(department,'General') AS category,
+                     COUNT(*) AS count,
+                     COALESCE(AVG(call_duration) FILTER (WHERE call_duration>0), 0) AS avg_duration,
+                     COUNT(*) FILTER (WHERE status IN ('abandoned','transferred')) AS escalations
+                   FROM cc_sessions WHERE created_at > NOW() - INTERVAL '24 hours'
+                   GROUP BY department ORDER BY count DESC
+POLLING          : One-time on view load
+STATUS           : [DB]
+
+COMPONENT        : CallAnalytics — Department drill-down table
+FEATURE          : Click a bubble → see individual calls for that dept
+API ENDPOINT     : GET /api/calls/category/{category}
+TABLE            : cc_sessions, cc_callers
+COLUMNS          :
+  cc_sessions  — id, session_id, department, status, call_duration, wait_seconds,
+                  created_at, recording_url, recording_consent
+  cc_callers   — email (caller_email), display_name (caller_name)
+SQL              : SELECT s.id, s.session_id, s.department, s.status, s.call_duration,
+                     s.wait_seconds, s.created_at, s.recording_url, s.recording_consent,
+                     c.email AS caller_email, c.display_name AS caller_name
+                   FROM cc_sessions s LEFT JOIN cc_callers c ON c.id = s.caller_id
+                   WHERE s.department = $1 AND s.created_at > NOW() - INTERVAL '24 hours'
+                   ORDER BY s.created_at DESC LIMIT 50
+POLLING          : On-demand (user clicks bubble)
+STATUS           : [DB]
+
+--------------------------------------------------------------------------------
+B7. SUPERUSER DASHBOARD — SCHEDULING PAGE
+    Component: Scheduling.jsx
+--------------------------------------------------------------------------------
+
+COMPONENT        : Scheduling — Stats cards (Total, Pending, Completed, etc.)
+FEATURE          : Show scheduling queue statistics
+API ENDPOINT     : GET /api/scheduling/stats
+TABLE            : outbound_queue
+COLUMNS          : status, created_at
+SQL              : SELECT COUNT(*) AS total,
+                     COUNT(*) FILTER (WHERE status='pending') AS pending,
+                     COUNT(*) FILTER (WHERE status='completed') AS completed,
+                     COUNT(*) FILTER (WHERE status='no_answer') AS no_answer,
+                     COUNT(*) FILTER (WHERE status IN ('assigned','in_progress')) AS active
+                   FROM outbound_queue WHERE created_at > NOW() - INTERVAL '7 days'
+POLLING          : One-time or 30s
+STATUS           : [DB]
+
+COMPONENT        : Scheduling — Jobs list table
+FEATURE          : Show all scheduled callback jobs
+API ENDPOINT     : GET /api/scheduling/jobs
+TABLE            : outbound_queue
+COLUMNS          : id, user_email, department, status, assigned_agent,
+                   attempts, created_at (as scheduled_at), last_attempt
+POLLING          : One-time or 30s
+STATUS           : [DB]
+
+COMPONENT        : Scheduling — Create Job form
+FEATURE          : Schedule a new outbound callback
+API ENDPOINT     : POST /api/scheduling/jobs
+TABLE            : outbound_queue, cc_callers, cc_sessions
+COLUMNS WRITTEN  : user_email, department, scheduled_time, agent_identity, status (→ 'pending')
+STATUS           : [DB]
+
+COMPONENT        : Scheduling — Cancel Job button
+FEATURE          : Delete a scheduled callback
+API ENDPOINT     : DELETE /api/scheduling/jobs/{job_id}
+TABLE            : outbound_queue
+COLUMNS          : id
+STATUS           : [DB]
+
+--------------------------------------------------------------------------------
+B8. SUPERUSER DASHBOARD — NEURAL ENGINE (AI QUERY BOX)
+    Component: AIChatBox.jsx / Neural Engine section in Dashboard
+--------------------------------------------------------------------------------
+
+COMPONENT        : Neural Engine — Query input + Submit
+FEATURE          : Natural language → AI analysis of call center data
+API ENDPOINT     : POST /api/ask
+TABLE            : cc_sessions, agent_states, cc_callers (backend reads these for context)
+COLUMNS READ     :
+  cc_sessions   — session_id, status, department, call_duration, created_at, agent_id
+  agent_states  — agent_identity, agent_name, department, status
+  cc_callers    — email, display_name
+AI BACKEND       : Gemini (via _gemini_sync from backend.language.llm_core)
+FALLBACK         : Returns raw DB stats if Gemini unreachable
+STATUS           : [DB] + AI (Gemini)
+NOTE             : calls_handled is NOT a column — computed in backend via CTE before prompt
+
+COMPONENT        : Neural Engine — Response display
+FEATURE          : Render AI-generated answer with DB data embedded
+STATUS           : [PROP] — renders response from POST /api/ask result
+
+--------------------------------------------------------------------------------
+B9. SUPERUSER DASHBOARD — ACTIVE CALLS PANEL
+    Component: ActiveCallsPanel.jsx (shared with admin)
+    Hook: useActiveCalls.js
+--------------------------------------------------------------------------------
+
+COMPONENT        : ActiveCallsPanel — Live call list
+FEATURE          : Real-time list of all active calls across all agents
+API ENDPOINT     : GET /api/calls/active
+TABLE            : cc_sessions, cc_callers
+COLUMNS          :
+  cc_sessions  — id, session_id, department, status, call_duration, agent_id,
+                  created_at, ended_at, recording_url, recording_consent,
+                  wait_seconds, sla_target_seconds, sla_breached
+  cc_callers   — email (caller_number), display_name (caller_name)
+SQL WHERE        : status = ANY(['queued','connected','on_hold','conference',
+                                 'ringing','dialing'])
+                   AND ended_at IS NULL
+                   AND created_at > NOW() - INTERVAL '4 hours'
+POLLING          : 4s
+STATUS           : [DB]
+
+COMPONENT        : ActiveCallsPanel — TranscriptModal
+FEATURE          : View live transcript for active call
+API ENDPOINT     : GET /api/calls/{callId}/transcript
+TABLE            : transcripts
+COLUMNS          : id, call_id, session_id, speaker, text, sentiment, created_at
+STATUS           : [DB]
+
+COMPONENT        : ActiveCallsPanel — Add Transcript entry
+FEATURE          : Manually add a transcript line
+API ENDPOINT     : POST /api/calls/{callId}/transcript
+TABLE            : transcripts
+COLUMNS          : call_id, session_id, speaker, text, sentiment
+STATUS           : [DB]
+
+COMPONENT        : ActiveCallsPanel — RecordingPlayer
+FEATURE          : Stream and play audio recording
+API ENDPOINT     : GET /calls/{callId}/recording
+TABLE            : cc_sessions
+COLUMNS          : recording_url, recording_consent
+STATUS           : [DB]
+
+COMPONENT        : ActiveCallsPanel — End Call button
+FEATURE          : Terminate active call from superuser view
+API ENDPOINT     : POST /api/calls/{callId}/end
+TABLE            : cc_sessions, call_summaries
+COLUMNS          : status (→ 'ended'), ended_at, call_duration
+STATUS           : [DB]
+
+COMPONENT        : ActiveCallsPanel — Transfer button (TransferMini)
+FEATURE          : Transfer call to another department
+API ENDPOINT     : POST /api/calls/{callId}/transfer
+TABLE            : cc_sessions
+COLUMNS          : status (→ 'transferred'), department
+STATUS           : [DB]
+
+COMPONENT        : ActiveCallsPanel — Take Over button
+FEATURE          : Superuser joins live call (LiveKit)
+API ENDPOINT     : POST /api/calls/{callId}/takeover
+TABLE            : cc_sessions
+COLUMNS          : session_id, room_id (to get LiveKit token)
+STATUS           : [DB]
+
+COMPONENT        : StatusBadge          [NONE] — display-only, value from prop
+COMPONENT        : SLABadge             [NONE] — computed from sla_target_seconds + timestamps
+COMPONENT        : ConsentBadge         [NONE] — display-only from row.recording_consent
+COMPONENT        : LiveDuration         [NONE] — JS setInterval timer, no DB
+
+--------------------------------------------------------------------------------
+B10. SUPERUSER DASHBOARD — HISTORY PANEL
+     Component: HistoryPanel.jsx (shared with admin)
+--------------------------------------------------------------------------------
+
+COMPONENT        : HistoryPanel — Call history table
+FEATURE          : Searchable paginated call history (date filter KEPT here)
+API ENDPOINT     : GET /api/calls?limit=50
+TABLE            : cc_sessions, cc_callers
+COLUMNS          :
+  cc_sessions  — id, session_id, room_id, department, status, call_duration,
+                  agent_id, created_at, ended_at, recording_url, recording_consent,
+                  wait_seconds, csat
+  cc_callers   — email (caller_number), display_name (caller_name)
+POLLING          : 5s silent refresh
+STATUS           : [DB]
+
+COMPONENT        : HistoryPanel — Transcript modal
+FEATURE          : View full call transcript
+API ENDPOINT     : GET /api/calls/{callId}/transcript
+TABLE            : transcripts
+COLUMNS          : id, speaker, text, sentiment, created_at
+STATUS           : [DB]
+
+COMPONENT        : HistoryPanel — Delete button
+FEATURE          : Remove call record permanently
+API ENDPOINT     : DELETE /api/calls/{callId}
+TABLE            : cc_sessions
+COLUMNS          : id
+STATUS           : [DB]
+
+COMPONENT        : HistoryPanel — Search bar
+FEATURE          : Client-side text filter
+FILTERS ON       : caller_number, caller_name, agent_name, department, status, sentiment
+STATUS           : [NONE] — no API call, filters local state
+
+COMPONENT        : HistoryPanel — Date Range Picker
+FEATURE          : Filter by date range (ONLY panel that keeps date filter)
+STATUS           : [NONE] — client-side filter on created_at
+
+--------------------------------------------------------------------------------
+B11. SUPERUSER DASHBOARD — BROADCAST PANEL
+     Component: BroadcastPanel.jsx (shared with admin)
+--------------------------------------------------------------------------------
+
+COMPONENT        : Broadcast — Active broadcasts list
+FEATURE          : Show live broadcast sessions
+API ENDPOINT     : GET /api/webrtc/broadcast/active
+STATUS           : [MEM] — in-memory _broadcasts on server, no DB table
+
+COMPONENT        : Broadcast — Broadcast history list
+FEATURE          : Show past broadcast sessions
+API ENDPOINT     : GET /api/webrtc/broadcast/history?limit=20
+STATUS           : [MEM]
+
+COMPONENT        : Broadcast — Start broadcast form
+FEATURE          : Create new LiveKit broadcast room
+API ENDPOINT     : POST /api/webrtc/broadcast/start
+STATUS           : [MEM]
+
+COMPONENT        : Broadcast — End broadcast button
+FEATURE          : Terminate broadcast session
+API ENDPOINT     : POST /api/webrtc/broadcast/{id}/end
+STATUS           : [MEM]
+
+COMPONENT        : Broadcast — Get listener token
+FEATURE          : Get LiveKit JWT to listen to broadcast
+API ENDPOINT     : GET /api/webrtc/broadcast/{id}/token
+STATUS           : [MEM]
+
+COMPONENT        : Email — SMTP status indicator
+FEATURE          : Check if email is configured
+API ENDPOINT     : GET /api/email/status
+TABLE            : admin_config
+COLUMNS          : key (smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from), value
+STATUS           : [DB]
+
+COMPONENT        : Email — Template list
+FEATURE          : Load email templates for compose
+API ENDPOINT     : GET /api/email/templates
+STATUS           : [MEM]
+
+COMPONENT        : Email — Create template
+FEATURE          : Save new email template
+API ENDPOINT     : POST /api/email/templates
+STATUS           : [MEM]
+
+COMPONENT        : Email — Campaign history
+FEATURE          : Show sent email campaigns
+API ENDPOINT     : GET /api/email/campaigns
+TABLE            : outbound_queue
+COLUMNS          : id, user_email, department, status, last_attempt, scheduler_email_sent
+STATUS           : [DB] (partially — only queued campaigns survive restart)
+
+COMPONENT        : Email — Send campaign
+FEATURE          : Send email to department users via SMTP
+API ENDPOINT     : POST /api/email/send
+STATUS           : [MEM] — delivery via SMTP, no DB write for send itself
+
+--------------------------------------------------------------------------------
+B12. SUPERUSER DASHBOARD — BUSINESS HOURS PAGE
+     Component: BusinessHours.jsx
+--------------------------------------------------------------------------------
+
+COMPONENT        : BusinessHours — Hours grid
+FEATURE          : Show and edit open/close hours per weekday
+API ENDPOINT     : GET /api/cc/admin/config
+TABLE            : admin_config
+COLUMNS          : key ('business_hours'), value (JSON with per-day hours)
+STATUS           : [DB]
+
+COMPONENT        : BusinessHours — Save button
+FEATURE          : Persist updated business hours
+API ENDPOINT     : POST /api/cc/admin/business-hours
+TABLE            : admin_config
+COLUMNS          : key, value (UPSERT)
+STATUS           : [DB]
+
+COMPONENT        : BusinessHours — Holiday Message form
+FEATURE          : Set/clear a holiday override message
+API ENDPOINT     : POST /api/cc/holiday  |  DELETE /api/cc/holiday
+TABLE            : admin_config
+COLUMNS          : key (holiday_active, holiday_message), value
+STATUS           : [DB]
+
+--------------------------------------------------------------------------------
+B13. SUPERUSER DASHBOARD — SETTINGS PAGE
+     Component: Settings.jsx
+--------------------------------------------------------------------------------
+
+COMPONENT        : Settings — SMTP Config form
+FEATURE          : Set outbound email (SMTP) configuration
+API ENDPOINT     : GET /api/cc/admin/email-config  |  POST /api/cc/admin/email-config
+TABLE            : admin_config
+COLUMNS          : key (smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from), value
+STATUS           : [DB]
+
+COMPONENT        : Settings — Bulk config save
+FEATURE          : Save all settings at once (max_wait_seconds, timezone, etc.)
+API ENDPOINT     : PUT /api/cc/admin/config
+TABLE            : admin_config
+COLUMNS          : key, value (bulk UPSERT)
+STATUS           : [DB]
+
+COMPONENT        : Settings — Routing Rules panel
+FEATURE          : View and reload call routing configuration
+API ENDPOINT     : GET /api/routing/rules  |  POST /api/routing/rules/reload
+TABLE            : routing engine config (file or DB)
+STATUS           : [DB/FILE]
+
+COMPONENT        : Settings — Clear Queues button (DANGER)
+FEATURE          : Wipe all active sessions, queues, and agent states
+API ENDPOINT     : POST /api/cc/admin/clear-queues
+TABLE            : cc_sessions, outbound_queue, agent_states
+COLUMNS          : All rows cleared or status reset to 'offline'
+STATUS           : [DB] — DESTRUCTIVE
+
+
+================================================================================
+  SECTION C: COMPLETE POLLING INTERVALS REFERENCE
+================================================================================
+
+COMPONENT / HOOK                     INTERVAL     ENDPOINT
+------------------------------------ ------------ ------------------------------
+useAgentDashboard (all agent data)   30 seconds   /api/agent/call-stats
+                                                  /api/agent/calls
+                                                  /api/agent/csat
+Agent heartbeat                      30 seconds   /api/cc/agent/heartbeat
+QueueMonitor — WaitList              3 seconds    /api/cc/queue
+QueueMonitor — Active Agents         5 seconds    /api/cc/agents/status
+useActiveCalls — Active Calls        4 seconds    /api/calls/active
+useActiveCalls — History             4 seconds    /api/calls/history
+SuperuserDashboard — Stats           5 seconds    /api/stats
+SuperuserDashboard — Realtime        5 seconds    /api/superuser/realtime
+HistoryPanel                         5 seconds    /api/calls?limit=50
+AppShell User Heartbeat              30 seconds   /api/cc/user/heartbeat
+IncomingCallNotification             Real-time WS /api/webrtc/ws/{agentId}
+OutboundCallNotification             Real-time WS /api/cc/ws/events
+SuperuserPage conference listener    Real-time WS /api/ws/events
+
+
+================================================================================
+  SECTION D: COMPLETE DATABASE TABLE REFERENCE
+================================================================================
+
+TABLE: cc_sessions
+  Purpose  : Every call — inbound, outbound, direct
+  Columns  : id, session_id, room_id, caller_id (FK→cc_callers), department,
+             status, call_duration, agent_id, created_at, ended_at,
+             recording_url, recording_consent, wait_seconds, csat,
+             sla_target_seconds, sla_breached
+  Used by  : Almost every component
+  IMPORTANT: calls_handled is NOT a column — always computed via COUNT(*) CTE
+
+TABLE: cc_callers
+  Purpose  : Caller / user identity directory
+  Columns  : id, email, display_name, last_seen
+  Used by  : Agent call list, ActiveCallsPanel, HistoryPanel, AgentDetail
+
+TABLE: agent_states
+  Purpose  : Agent presence, status, identity
+  Columns  : agent_identity, agent_name, department, status, last_heartbeat,
+             sequence_number, ignore_outbounds_until, ignore_reason
+  Used by  : QueueMonitor, BubbleChart2D, Realtime endpoint, all agent heartbeat calls
+  IMPORTANT: calls_handled NOT a column — computed from cc_sessions via CTE
+
+TABLE: transcripts
+  Purpose  : Per-utterance call dialogue (speaker + text)
+  Columns  : id, call_id, session_id, speaker, text, sentiment, created_at
+  Used by  : TranscriptModal in ActiveCallsPanel, HistoryPanel, Admindashboard
+
+TABLE: outbound_queue
+  Purpose  : Scheduled callbacks and outbound campaign jobs
+  Columns  : id, user_email, department, status, assigned_agent, attempts,
+             created_at, last_attempt, scheduler_email_sent
+  Used by  : Scheduling page, BroadcastPanel (email campaign history),
+             OutboundCallNotification, callcenter/api outbound flow
+
+TABLE: admin_config
+  Purpose  : Key-value system configuration store
+  Columns  : key (TEXT), value (TEXT/JSON)
+  Key rows : business_hours, holiday_active, holiday_message,
+             smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from,
+             max_wait_seconds, work_start, work_end, timezone
+  Used by  : BusinessHours, Settings, BroadcastPanel (SMTP status)
+
+TABLE: call_summaries
+  Purpose  : AI-generated post-call summaries and sentiment
+  Columns  : id, call_id, session_id, summary_text, sentiment, created_at
+  Used by  : End-call flow in home_routes; referenced indirectly by dashboard
+
+TABLE: users
+  Purpose  : User accounts (login, roles, credits)
+  Columns  : id, name, email, role, is_active, phone_number, created_at, credits
+  Used by  : AdminSettings only (not directly used by agent or superuser pages)
+
+
+================================================================================
+  SECTION E: FULL LIST — COMPONENTS NOT CONNECTED TO DATABASE
+================================================================================
+
+COMPONENT                   SPACE           REASON
+--------------------------- --------------- -----------------------------------
+KPIRow cards                Agent           [PROP] — renders stats from parent hook
+IVRCard (Sidebar)           Agent           [STUB] — /api/agent/ivr-status returns hardcoded data
+Agent tab nav buttons       Agent           [NONE] — local useState only
+Chart axes / legends        Agent           [NONE] — rendered from data already loaded
+Channel filter buttons      Agent           REMOVED — no longer in UI
+Date range picker           Agent           REMOVED from agent UI; only in HistoryPanel
+StatusBadge                 Both            [NONE] — display-only prop
+SLABadge                    Both            [NONE] — computed from timestamps
+ConsentBadge                Both            [NONE] — display-only prop
+LiveDuration counter        Both            [NONE] — JS setInterval
+RecordingPlayer             Both            [NONE] — <audio> element, URL from DB already loaded
+Search bar (HistoryPanel)   Both            [NONE] — client-side filter on local state
+Date filter (HistoryPanel)  Both            [NONE] — client-side filter on created_at
+Broadcast session list      Superuser       [MEM] — in-memory _broadcasts, no DB table
+Email templates list        Superuser       [MEM] — in-memory _email_templates, lost on restart
+Email send action           Superuser       [MEM] — SMTP only, no DB write
+Hardware Load KPI card      Superuser       [NONE] — placeholder/computed, not real CPU metric
+Sankey diagram (agent)      Agent           [PROP] — derived from call-stats response
+BubbleChart2D tooltip       Superuser       [PROP] — hover on already-loaded chart data
+3D Modal (Three.js)         Superuser       [PROP] — same data as 2D chart, on-demand render
+Department filter dropdown  Superuser       [NONE] — client-side filter
+Neural Engine response box  Superuser       [PROP] — renders result from POST /api/ask
+
+
+================================================================================
+  END OF MAPPING
+================================================================================

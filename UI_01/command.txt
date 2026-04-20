@@ -1,0 +1,18 @@
+terminal 1
+docker : 
+docker rm -f zookeeper livekit-server redis-cache kafka-broker
+docker compose down 
+docker compose up -d
+docker compose up
+
+terminal 2
+cd backend
+venv\Scripts\activate
+uvicorn main:app --host [IP_ADDRESS] --port 5000 --reload
+
+if error 
+Remove-Item -Recurse -Force venv
+
+
+terminal 3 
+npm run dev

@@ -1,0 +1,7 @@
+.venv/
+preview_output/*.wav
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env

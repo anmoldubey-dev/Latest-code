@@ -1,0 +1,60 @@
+{
+  "version": "1.0",
+  "rules": [
+    {
+      "name": "high_priority",
+      "priority": 10,
+      "enabled": true,
+      "conditions": {
+        "priority_gte": 8
+      },
+      "target": {
+        "queue_name": "priority",
+        "priority_override": 10,
+        "required_skills": [],
+        "ai_config": {"agent_name": "Priority Agent"},
+        "fallback_action": "queue"
+      }
+    },
+    {
+      "name": "tech_support",
+      "priority": 20,
+      "enabled": true,
+      "conditions": {
+        "source": ["browser", "external_browser"]
+      },
+      "target": {
+        "queue_name": "tech_support",
+        "required_skills": [],
+        "ai_config": {"agent_name": "Tech Support"},
+        "fallback_action": "queue"
+      }
+    },
+    {
+      "name": "after_hours",
+      "priority": 5,
+      "enabled": true,
+      "conditions": {
+        "time_of_day_utc_outside": ["09:00", "18:00"]
+      },
+      "target": {
+        "queue_name": "after_hours",
+        "required_skills": [],
+        "ai_config": {"agent_name": "After Hours Bot"},
+        "fallback_action": "callback"
+      }
+    },
+    {
+      "name": "default",
+      "priority": 999,
+      "enabled": true,
+      "conditions": {},
+      "target": {
+        "queue_name": "general",
+        "required_skills": [],
+        "ai_config": {},
+        "fallback_action": "queue"
+      }
+    }
+  ]
+}

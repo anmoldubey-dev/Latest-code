@@ -1,0 +1,504 @@
+================================================================================
+  VOICEAICORE — ALL DATABASE TABLES IN USE
+  Complete reference: table name, columns, and which feature uses each column
+================================================================================
+
+Total tables: 15
+  - 13 on Neon PostgreSQL (cloud)
+  - 1  on Neon PostgreSQL via pgvector extension
+  - 1  SQLite local file (corrections — NOT Neon)
+
+--------------------------------------------------------------------------------
+DATABASE CONNECTION TYPES
+--------------------------------------------------------------------------------
+  asyncpg   → used by callcenter routes (FastAPI async) — Neon PostgreSQL
+  psycopg2  → used by pg_memory, long_term_memory, auth_routes — Neon PostgreSQL
+  sqlite3   → used by correction_store.py — local file on disk
+
+================================================================================
+TABLE 1: cc_callers
+DATABASE: Neon PostgreSQL (asyncpg)
+PURPOSE: Stores every unique caller who has ever connected to the system
+================================================================================
+
+  COLUMN          TYPE            USED BY / DISPLAYS
+  --------------- --------------- -----------------------------------------------
+  id              SERIAL PK       FK in cc_sessions.caller_id — links calls to
+                                  callers; FK lookup in crm_routes caller_profile
+  email           VARCHAR(255)    CRM sidebar caller email · Agent call history
+                                  caller email · CRM Contacts tab table · Zoho
+                                  sync lookup key · crm_contacts upsert key
+  display_name    VARCHAR(100)    CRM sidebar caller name · Agent call history
+                                  caller name column
+  created_at      TIMESTAMPTZ     Call history date display
+  last_seen       TIMESTAMPTZ     Updated on every call upsert (ON CONFLICT)
+
+FEATURES USING THIS TABLE:
+  - CRM sidebar (live call panel) — shows caller name + email during active call
+  - Agent call history table — caller_name column
+  - CRM Contacts tab — populates contact list from caller data
+  - POST /api/webrtc/token — upserts caller on browser call start
+  - Incoming call acceptance — upserts caller when customer dials in
+  - /api/crm/caller-profile/{id} — joins to get caller info for CRM panel
+
+================================================================================
+TABLE 2: cc_sessions
+DATABASE: Neon PostgreSQL (asyncpg)
+PURPOSE: One row per call session — the central call log table
+================================================================================
+
+  COLUMN          TYPE            USED BY / DISPLAYS
+  --------------- --------------- -----------------------------------------------
+  id              SERIAL PK       FK in outbound_queue.call_log_id,
+                                  FK in transcripts.call_id
+  caller_id       INTEGER         FK → cc_callers.id; JOIN to get caller info
+  session_id      VARCHAR(100)    CRM caller-profile lookup · transcript lookup
+                                  · call history identifier · LiveKit room link
+  room_id         VARCHAR(100)    LiveKit room name · incoming call CRM lookup
+                                  fallback (when localCallId is missing)
+  department      VARCHAR(100)    Agent dashboard category/bubble chart ·
+                                  CRM session history department label ·
+                                  queue routing to correct department agent
+  queue_position  INTEGER         Queue position display on user/caller side
+  status          VARCHAR(30)     Agent KPI cards (Total/Resolved/Escalated) ·
+                                  active calls list (superuser) · call history
+                                  status badge · CRM session history status chip
+                                  Values: queued, ringing, connected, ended,
+                                  completed, abandoned, escalated, transferred
+  wait_seconds    INTEGER         Queue wait time display (superuser panel)
+  call_duration   INTEGER         Agent KPI avg duration · call history duration
+                                  column (seconds)
+  agent_id        VARCHAR(100)    Filters ALL agent dashboard queries to the
+                                  logged-in agent's own calls only
+  created_at      TIMESTAMPTZ     Daily volume chart (x-axis) · hourly heatmap ·
+                                  call history date column · CRM session history
+                                  date label
+  ended_at        TIMESTAMPTZ     Call end time tracking; used to compute duration
+
+FEATURES USING THIS TABLE:
+  - Agent Dashboard KPI cards: Total Calls, Resolved, Escalated (status filter)
+  - Agent Dashboard Charts: DailyLine, HourlyHeat, CategoryBubble, StatusPie
+  - Agent Call History table (CallsTab) — full call log
+  - CRM sidebar session history panel — last 5 sessions for repeat callers
+  - CRM Contacts drawer — call history per contact
+  - Superuser active calls list — status IN (connected, queued, ringing)
+  - Superuser analytics — call volume, department breakdown
+  - Queue management engine — assigns agents, tracks wait
+  - /api/agent/call-stats — all KPI aggregations
+  - /api/agent/calls — call history list for agent
+
+================================================================================
+TABLE 3: agent_states
+DATABASE: Neon PostgreSQL (asyncpg)
+PURPOSE: Real-time presence and status of every agent
+================================================================================
+
+  COLUMN                  TYPE          USED BY / DISPLAYS
+  ----------------------- ------------- -----------------------------------------
+  id                      SERIAL PK     Internal
+  agent_identity          VARCHAR(100)  Agent login key · heartbeat · online/
+                                        offline toggle · outbound assignment
+  agent_name              VARCHAR(100)  Agent profile display in dashboard header
+  department              VARCHAR(100)  Queue routing — match caller department
+                                        to available agent in same department
+  status                  VARCHAR(30)   Online/offline/busy indicator · active
+                                        agents count (superuser dashboard) ·
+                                        outbound engine skips non-online agents
+                                        Values: online, offline, busy
+  sequence_number         INTEGER       Round-robin counter for fair outbound
+                                        call distribution across agents
+  ignore_outbounds_until  TIMESTAMPTZ   Scheduler — skip agent during cool-down
+                                        period after a missed call
+  ignore_reason           TEXT          Why agent was skipped (logged internally)
+  went_online_at          TIMESTAMPTZ   Agent uptime / session start tracking
+  last_heartbeat          TIMESTAMPTZ   Auto-offline trigger if no heartbeat
+                                        received within 30 seconds
+
+FEATURES USING THIS TABLE:
+  - Agent online/offline toggle button (AgentDashboard)
+  - Heartbeat endpoint — updates last_heartbeat every 20s
+  - Queue routing engine — finds available online agent for incoming call
+  - Outbound call engine — picks next agent by sequence_number
+  - Superuser dashboard — total online agents count
+  - Agent profile header — agent_name display
+
+================================================================================
+TABLE 4: outbound_queue
+DATABASE: Neon PostgreSQL (asyncpg)
+PURPOSE: Queue of outbound/callback calls to be dialed by agents
+================================================================================
+
+  COLUMN                TYPE          USED BY / DISPLAYS
+  --------------------- ------------- -------------------------------------------
+  id                    SERIAL PK     Internal
+  call_log_id           INTEGER       FK → cc_sessions.id — links to original
+                                      inbound session that triggered callback
+  user_email            VARCHAR(255)  Which user/caller is being called back
+  department            VARCHAR(100)  Which department handles this outbound call
+  status                VARCHAR(30)   Queue status shown in superuser queue panel
+                                      Values: pending, in_progress, completed,
+                                      no_answer, cancelled
+  assigned_agent        VARCHAR(100)  Which agent accepted/is handling this call
+  attempts              INTEGER       Retry counter — shown in superuser queue list
+  created_at            TIMESTAMPTZ   Queue entry creation time
+  last_attempt          TIMESTAMPTZ   Timestamp of last dial attempt
+  scheduler_email_sent  BOOLEAN       Prevents duplicate scheduling notification
+                                      emails from being sent to the caller
+
+FEATURES USING THIS TABLE:
+  - Outbound call engine — auto-dials pending entries, assigns to agents
+  - Superuser queue/scheduling panel — queue list with status + attempts
+  - Callback scheduling — creates entry when caller requests callback
+  - Scheduler email service — sends email when scheduler_email_sent is FALSE
+
+================================================================================
+TABLE 5: admin_config
+DATABASE: Neon PostgreSQL (asyncpg)
+PURPOSE: Key-value store for all runtime configuration and secrets
+================================================================================
+
+  COLUMN      TYPE          USED BY / DISPLAYS
+  ----------- ------------- -------------------------------------------------
+  key         VARCHAR(100)  Config key name (see values below)
+  value       TEXT          Config value read at runtime
+  updated_at  TIMESTAMPTZ   Token refresh timestamp for expiry calculation
+
+KNOWN KEYS AND THEIR PURPOSE:
+  zoho_client_id        Zoho OAuth2 app client ID
+  zoho_client_secret    Zoho OAuth2 app client secret
+  zoho_access_token     Active Zoho bearer token (auto-refreshed)
+  zoho_refresh_token    Refresh token for Zoho token renewal
+  zoho_token_expires_at ISO timestamp — if past, triggers auto-refresh
+  zoho_org_id           Zoho CRM organisation ID
+  zoho_desk_org_id      Zoho Desk organisation ID
+  zoho_redirect_uri     OAuth2 callback URL
+  zoho_ngrok_url        Public ngrok URL for webhooks
+  zoho_webhook_secret   Token verified on every incoming Zoho webhook
+  zoho_api_domain       zoho.in or zohoapis.com (region setting)
+  smtp_host             SMTP server for email
+  smtp_port             SMTP port
+  smtp_user             SMTP login username
+  smtp_password         SMTP login password
+  smtp_from             From-address for outbound emails
+
+FEATURES USING THIS TABLE:
+  - ALL Zoho API calls — reads access token before every request
+  - Zoho token auto-refresh — reads expires_at, writes new token
+  - Zoho webhook verification — reads zoho_webhook_secret
+  - SMTP email service — reads smtp_* keys for outbound emails
+  - Admin Settings page — displays/edits all config keys
+
+================================================================================
+TABLE 6: transcripts
+DATABASE: Neon PostgreSQL (asyncpg)
+PURPOSE: Per-turn transcript lines for every call with sentiment
+================================================================================
+
+  COLUMN      TYPE          USED BY / DISPLAYS
+  ----------- ------------- -------------------------------------------------
+  id          SERIAL PK     Internal
+  call_id     INTEGER       FK → cc_sessions.id (ON DELETE SET NULL)
+  session_id  VARCHAR(200)  Lookup by LiveKit room name for live transcripts
+  speaker     VARCHAR(50)   "agent" or "caller" label in transcript viewer
+  text        TEXT          Full transcript text shown in call detail drawer
+  sentiment   VARCHAR(20)   Sentiment badge per line · CRM avg sentiment stat ·
+                            agent sentiment breakdown chart · CRM caller profile
+                            Values: positive, negative, neutral
+  created_at  TIMESTAMPTZ   Transcript line chronological ordering
+
+FEATURES USING THIS TABLE:
+  - Live call transcript viewer (agent dashboard call detail modal)
+  - CRM sidebar avg sentiment stat (averaged over last 5 sessions)
+  - CRM caller-profile endpoint — avg sentiment per session
+  - Agent dashboard SentimentPie chart — sentiment breakdown
+  - WebRTC transcript save — INSERT on every speech turn during call
+  - /api/agent/calls — joins sentiment for call history rows
+
+================================================================================
+TABLE 7: crm_contacts
+DATABASE: Neon PostgreSQL (asyncpg)
+PURPOSE: CRM contact records, synced bidirectionally with Zoho CRM
+================================================================================
+
+  COLUMN           TYPE          USED BY / DISPLAYS
+  ---------------- ------------- -----------------------------------------------
+  id               SERIAL PK     Internal
+  zoho_contact_id  VARCHAR(100)  Zoho CRM sync link · "Sync Zoho" button state ·
+                                 webhook upsert/delete key · PATCH /zoho/contacts
+  email            VARCHAR(255)  Primary lookup key · CRM Contacts tab table ·
+                                 UNIQUE constraint
+  phone            VARCHAR(50)   CRM sidebar phone · CRM Contacts tab
+  name             VARCHAR(200)  CRM sidebar caller name · CRM Contacts tab ·
+                                 Edit modal name field
+  company          VARCHAR(200)  CRM sidebar company · CRM Contacts tab ·
+                                 Edit modal company field
+  segment          VARCHAR(50)   Tier badge in CRM sidebar (VIP/standard/
+                                 enterprise) · CRM Contacts segment filter ·
+                                 Edit modal segment dropdown
+                                 Values: standard, vip, enterprise
+  zoho_synced_at   TIMESTAMPTZ   "Zoho Synced" column in CRM Contacts tab —
+                                 shows when last synced to Zoho
+  created_at       TIMESTAMPTZ   CRM Contacts list sort order
+
+FEATURES USING THIS TABLE:
+  - CRM sidebar live call panel — tier/name/email/company during active call
+  - CRM Contacts tab — full contact list, drawer, edit modal, delete button
+  - Zoho auto-sync background task — upserts after new caller profile created
+  - Zoho webhook (contact.created/updated/deleted) — keeps Neon in sync
+  - PATCH /api/crm/contacts/{email} — edit from dashboard
+  - DELETE /api/crm/contacts/{email} — delete from dashboard + Zoho
+  - GET /api/zoho/contacts/lookup — finds and links existing Zoho contacts
+
+================================================================================
+TABLE 8: crm_tickets
+DATABASE: Neon PostgreSQL (asyncpg)
+PURPOSE: Support tickets linked to callers, synced with Zoho Desk
+================================================================================
+
+  COLUMN           TYPE          USED BY / DISPLAYS
+  ---------------- ------------- -----------------------------------------------
+  id               SERIAL PK     PK; FK in crm_notes.ticket_id
+  zoho_ticket_id   VARCHAR(100)  Zoho Desk sync · ticket badge ID in CRM sidebar
+                                 UNIQUE constraint
+  contact_email    VARCHAR(255)  Filter tickets by caller email
+  subject          VARCHAR(500)  Ticket subject in CRM sidebar active ticket
+                                 panel · CRM Tickets tab subject column
+  status           VARCHAR(50)   Status badge in CRM sidebar · Tickets tab
+                                 status filter chip
+                                 Values: open, closed, resolved, on_hold
+  priority         VARCHAR(30)   Priority badge in CRM Tickets tab
+                                 Values: low, medium, high, urgent
+  created_at       TIMESTAMPTZ   Tickets tab sort order
+  call_session_id  VARCHAR(100)  Links ticket to the call that created it ·
+                                 shown as "Call Session" column in Tickets tab
+
+FEATURES USING THIS TABLE:
+  - CRM sidebar active ticket panel — auto-created on call start, shows
+    subject + status + note input
+  - CRM Tickets tab — full ticket list with filters + inline notes
+  - POST /api/zoho/desk/tickets — creates in Zoho Desk + inserts here
+  - POST /api/crm/tickets — fallback create if Zoho unavailable
+  - Zoho Desk webhook — syncs ticket status updates back to Neon
+
+================================================================================
+TABLE 9: crm_notes
+DATABASE: Neon PostgreSQL (asyncpg)
+PURPOSE: Agent notes attached to tickets, synced to Zoho Desk comments
+================================================================================
+
+  COLUMN      TYPE          USED BY / DISPLAYS
+  ----------- ------------- -------------------------------------------------
+  id          SERIAL PK     Internal
+  ticket_id   INTEGER       FK → crm_tickets.id (ON DELETE CASCADE)
+  agent_id    VARCHAR(100)  Which agent wrote this note (JWT identity)
+  note_text   TEXT          Note content shown in CRM sidebar note list ·
+                            CRM Tickets tab expandable notes section
+  created_at  TIMESTAMPTZ   Notes chronological sort order
+
+FEATURES USING THIS TABLE:
+  - CRM sidebar note input — agent types note during live call, press Enter
+    to save; shows confirmation flash
+  - CRM Tickets tab — expandable row shows all notes per ticket
+  - POST /api/crm/tickets/{id}/notes — saves to Neon
+  - POST /api/zoho/desk/tickets/{id}/notes — also syncs to Zoho Desk comment
+
+================================================================================
+TABLE 10: users
+DATABASE: Neon PostgreSQL (psycopg2 — separate connection from auth_routes)
+PURPOSE: Authentication and role management for all platform users
+================================================================================
+
+  COLUMN         TYPE          USED BY / DISPLAYS
+  -------------- ------------- -----------------------------------------------
+  id             SERIAL PK     Internal
+  name           VARCHAR       Agent/admin display name in dashboard header
+  email          VARCHAR       Login auth identifier · JWT subject/identity
+  password_hash  VARCHAR       bcrypt hash verified at login
+  phone_number   VARCHAR       Agent profile Settings tab
+  role           VARCHAR       Access control gate for all routes
+                               Values: agent, admin, superuser
+  is_active      BOOLEAN       Admin user management — toggle active/inactive
+                               (inactive users cannot log in)
+  created_at     TIMESTAMPTZ   Admin user list sort order
+
+FEATURES USING THIS TABLE:
+  - Login page — email + password validation
+  - JWT token generation — encodes role + email
+  - All ProtectedRoute components — role checked against token
+  - Admin Settings user management table — list, toggle active, change role
+  - Agent profile display — name in dashboard header
+  - Superuser user count stats — total users, active users, agents
+
+================================================================================
+TABLE 11: conversation_turns
+DATABASE: Neon PostgreSQL with pgvector extension (psycopg2 via pg_memory)
+PURPOSE: Per-turn embeddings for AI semantic memory and RAG retrieval
+================================================================================
+
+  COLUMN      TYPE              USED BY / DISPLAYS
+  ----------- ----------------- -----------------------------------------------
+  session_id  TEXT              Links turn to a call session
+  role        TEXT              Speaker label: "agent" or "user"
+  text        TEXT              Turn transcript text
+  lang        TEXT              Detected language of this turn
+  embedding   vector(384)       384-dimensional float vector (all-MiniLM-L6-v2)
+                                Used for cosine similarity RAG search during
+                                live AI calls to retrieve relevant context
+  ts          TIMESTAMPTZ       Timestamp; shown in /api/turns admin view
+
+FEATURES USING THIS TABLE:
+  - AI memory/RAG — semantic context retrieval injected into LLM prompt
+    during live AI voice calls (finds relevant past turns by similarity)
+  - /api/turns endpoint — returns recent turns for session analytics page
+  - smart_rag.py — vector similarity search across role/text/lang columns
+
+================================================================================
+TABLE 12: call_records
+DATABASE: Neon PostgreSQL (psycopg2 via pg_memory) — AI voice calls only
+PURPOSE: Full post-call record for AI-handled (non-agent) voice calls
+================================================================================
+
+  COLUMN           TYPE       USED BY / DISPLAYS
+  ---------------- ---------- -------------------------------------------------
+  session_id       TEXT PK    Unique call identifier
+  phone            TEXT       Caller phone number
+  lang             TEXT       Detected call language
+  sentiment        TEXT       Overall call sentiment classification
+  primary_intent   TEXT       Main intent detected in the call
+  turns_json       JSONB      Full conversation turn array
+  diarization_json JSONB      Speaker diarization segments
+  total_turns      INT        Turn count
+  duration_secs    FLOAT      Call duration in seconds
+  voice_stem       TEXT       Which AI avatar/voice handled the call
+  llm_used         TEXT       Which LLM model handled the call
+  avg_response_ms  FLOAT      Average AI response latency in milliseconds
+  created_at       TIMESTAMP  Analytics time axis
+
+FEATURES USING THIS TABLE:
+  - /api/analytics endpoint — KPI aggregations:
+      total_calls, avg_duration, avg_turns, avg_response_ms
+  - /api/analytics — distribution charts:
+      lang_distribution, sentiment_distribution,
+      agent_distribution (voice_stem), llm_distribution
+  - /api/analytics — daily_volume (calls per day)
+  - Session analytics page (admin/superuser) — all above metrics displayed
+
+================================================================================
+TABLE 13: avatar_configs
+DATABASE: Neon PostgreSQL (psycopg2 via pg_memory)
+PURPOSE: AI persona/avatar configuration — sets LLM prompt, voice, greeting
+================================================================================
+
+  COLUMN              TYPE       USED BY / DISPLAYS
+  ------------------- ---------- -----------------------------------------------
+  voice_stem          TEXT PK    AI avatar identifier (e.g. "srcomsoft_en")
+  company_name        TEXT       Avatar's company persona
+  agent_name          TEXT       AI agent display name spoken in greeting
+  language            TEXT       Avatar language setting
+  gender              TEXT       Voice gender (male/female)
+  original_context    TEXT       Raw input used to generate this avatar
+  generated_role      TEXT       Avatar's role/job title persona
+  generated_prompt    TEXT       Full LLM system prompt injected at call start
+  generated_greeting  TEXT       First message spoken by AI when caller connects
+  custom_style        TEXT       TTS voice style parameter
+  custom_speed        TEXT       TTS speech speed parameter
+  updated_at          TIMESTAMP  Last configuration update
+
+FEATURES USING THIS TABLE:
+  - AI call start — loads avatar config by voice_stem to set:
+      LLM system prompt (generated_prompt)
+      Opening greeting (generated_greeting)
+      TTS voice + speed settings
+  - Avatar/persona management — CRUD via pg_memory.init_avatar_table()
+
+================================================================================
+TABLE 14: ai_routing_rules
+DATABASE: Neon PostgreSQL (psycopg2 via pg_memory)
+PURPOSE: Rule-based routing logic to assign calls to specific LLM/voice combos
+================================================================================
+
+  COLUMN       TYPE       USED BY / DISPLAYS
+  ------------ ---------- -----------------------------------------------
+  id           SERIAL PK  Internal
+  rule_name    TEXT       Rule identifier label
+  conditions   JSONB      Match conditions (e.g. language, detected intent,
+                          caller segment, time of day)
+  target_voice TEXT       Route matched calls to this AI voice/avatar stem
+  target_llm   TEXT       Route matched calls to this LLM backend
+                          Values: ollama, openai, anthropic, etc.
+  priority     INT        Rule evaluation order (higher = evaluated first)
+  active       BOOLEAN    Enable/disable this rule without deleting
+  created_at   TIMESTAMP  Rule creation time
+  updated_at   TIMESTAMP  Last modified time
+
+FEATURES USING THIS TABLE:
+  - AI call routing engine — evaluates rules in priority order at call start
+    to decide which LLM and voice handles the call
+  - Currently: table is initialized and structure is ready; full dynamic
+    routing is plugged in for extension (static routing is the active path)
+
+================================================================================
+TABLE 15: corrections
+DATABASE: SQLite — LOCAL FILE (not Neon, not cloud)
+FILE PATH: backend/speech/stt/feedback/corrections.db (or configured path)
+PURPOSE: STT correction pairs to fix recurring speech-to-text misrecognitions
+================================================================================
+
+  COLUMN      TYPE     USED BY / DISPLAYS
+  ----------- -------- -------------------------------------------------
+  id          INTEGER  PK (AUTOINCREMENT)
+  lang        TEXT     Language this correction applies to (e.g. "en", "hi")
+  bad_text    TEXT     The wrong STT output pattern to find and replace
+  corrected   TEXT     The correct replacement text
+  hits        INTEGER  Count of how many times this correction has matched
+                       (used to prioritise/audit high-frequency fixes)
+  created_at  TEXT     Creation timestamp
+  updated_at  TEXT     Last modification timestamp
+
+  UNIQUE constraint on (lang, bad_text) — no duplicate correction pairs
+
+FEATURES USING THIS TABLE:
+  - STT feedback loop (feedback_loop.py) — after every speech transcription,
+    all corrections for the detected language are loaded and applied as
+    regex replacements to the raw STT output in real-time
+  - Admin correction management — list_corrections() returns all pairs
+    for display in admin correction console
+  - add_correction() — agents/admins submit new correction pairs
+
+================================================================================
+QUICK REFERENCE: WHICH FRONTEND FEATURE READS WHICH TABLE
+================================================================================
+
+  FEATURE                              TABLES READ
+  ------------------------------------ -------------------------------------------
+  Agent Dashboard KPI cards            cc_sessions (status, agent_id)
+  Agent Dashboard Charts               cc_sessions (status, department, created_at,
+                                       call_duration), transcripts (sentiment)
+  Agent Call History (CallsTab)        cc_sessions, cc_callers
+  Agent Profile (SettingsTab)          users (name, email, phone_number, role)
+  CRM Sidebar (live call panel)        cc_sessions, cc_callers, crm_contacts,
+                                       crm_tickets, transcripts (avg sentiment)
+  CRM Sidebar — note input             crm_notes (INSERT)
+  CRM Contacts tab                     crm_contacts
+  CRM Contacts drawer                  crm_contacts, cc_sessions, crm_tickets
+  CRM Tickets tab                      crm_tickets, crm_notes
+  CRM Emails tab                       Zoho Mail API only (no local table)
+  Superuser active calls               cc_sessions (status filter)
+  Superuser agent list                 agent_states, users
+  Superuser queue panel                outbound_queue
+  Superuser analytics                  cc_sessions, agent_states
+  Admin user management                users
+  Admin Settings                       admin_config
+  Login                                users
+  AI voice call (RAG context)          conversation_turns (vector search)
+  AI voice call analytics              call_records
+  AI avatar/persona load               avatar_configs
+  AI call routing                      ai_routing_rules
+  STT real-time correction             corrections (SQLite)
+  Zoho token refresh (all Zoho calls)  admin_config
+  Zoho webhook receive                 crm_contacts, crm_tickets (UPSERT)
+
+================================================================================
+END OF FILE
+Generated: 2026-04-18
+================================================================================

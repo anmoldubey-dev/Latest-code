@@ -1,0 +1,442 @@
+================================================================================
+  VOICEAICORE — SENTIMENT ANALYSIS SYSTEM
+  How it works, what it depends on, full workflow
+================================================================================
+
+--------------------------------------------------------------------------------
+OVERVIEW
+--------------------------------------------------------------------------------
+
+The sentiment analysis system is a layered, self-healing pipeline that analyses
+the emotional tone of every spoken turn during a live browser call. It operates
+in two modes simultaneously:
+
+  1. LIVE MODE  — analyses each transcript segment in real-time as the caller
+                  or agent speaks, feeds the AiAssistPanel with a color-coded
+                  sentiment label and a suggested action for the agent.
+
+  2. SAVE MODE  — analyses every transcript turn before saving it to the DB
+                  (transcripts table), so every stored row has a real ML-based
+                  sentiment label instead of a naive keyword guess.
+
+  3. SUMMARY MODE — when a call ends, aggregates all saved transcript turns,
+                    computes per-speaker sentiment breakdowns, and saves a full
+                    call summary to the call_summaries table.
+
+--------------------------------------------------------------------------------
+THE MODEL
+--------------------------------------------------------------------------------
+
+  Name      : lxyuan/distilbert-base-multilingual-cased-sentiments-student
+  Source    : HuggingFace Hub
+  License   : Apache 2.0 — fully permissive, commercial deployment allowed
+  Size      : ~270 MB
+  Type      : DistilBERT (student model distilled from mDeBERTa-v3)
+  Languages : Multilingual — English, Hindi, Malay, Japanese and others via
+              multilingual tokenizer (BertTokenizer mBERT vocabulary)
+  Output    : 3 labels — positive / neutral / negative
+  Speed     : ~13ms per sentence on CPU (~73 samples per second)
+  Accuracy  : 88.29% agreement with teacher model (mDeBERTa-v3)
+
+  Why this model?
+  - Apache 2.0 license → safe for commercial call center deployment
+  - ~270MB → fits comfortably in server memory alongside other models
+  - Multilingual → handles English+Hindi mixed speech (common in Indian calls)
+  - 3-class output → maps directly to our HAPPY/NEUTRAL/ANGRY display labels
+  - Fast enough for real-time use (<200ms per utterance budget)
+  - No API key, no external dependency — runs 100% locally
+
+--------------------------------------------------------------------------------
+FALLBACK CHAIN — WHAT HAPPENS IF THE MODEL IS NOT READY
+--------------------------------------------------------------------------------
+
+The system uses a 3-tier fallback so sentiment is NEVER unavailable:
+
+  TIER 1 — ML Model (primary)
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  lxyuan/distilbert-base-multilingual-cased-sentiments-student   │
+  │  Loaded in a background thread at server startup                │
+  │  Ready after ~5-15 seconds from first boot                      │
+  │  Returns: label + confidence score (0.0 to 1.0)                 │
+  └─────────────────────────────────────────────────────────────────┘
+            ↓  if model hasn't loaded yet OR inference crashes
+
+  TIER 2 — VADER (secondary fallback)
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  NLTK VADER (Valence Aware Dictionary and sEntiment Reasoner)   │
+  │  License: MIT — installed as part of nltk package               │
+  │  Loaded INSTANTLY at startup (no download needed)               │
+  │  Pure lexical — compound score from -1.0 to +1.0                │
+  │  compound >= 0.05  → positive                                   │
+  │  compound <= -0.05 → negative                                   │
+  │  between            → neutral                                   │
+  └─────────────────────────────────────────────────────────────────┘
+            ↓  if VADER also fails to initialize
+
+  TIER 3 — Keyword Matching (last resort)
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  Hard-coded word sets (8 positive, 8 negative words)            │
+  │  Counts overlap between input words and each set                │
+  │  Zero dependencies — always available                           │
+  └─────────────────────────────────────────────────────────────────┘
+
+  In practice: VADER is always ready for the first 5-15 seconds of server
+  life, then the ML model takes over permanently for the session.
+
+  Every response includes a "source" field: "ml" | "vader" | "keyword"
+  so you can see which tier handled each request.
+
+--------------------------------------------------------------------------------
+DEPENDENCIES (what the system relies on)
+--------------------------------------------------------------------------------
+
+  PYTHON PACKAGES (already in requirements.txt — no new installs needed):
+  ┌─────────────────────────────────────────────────────────┬──────────┐
+  │ Package                                                 │ Version  │
+  ├─────────────────────────────────────────────────────────┼──────────┤
+  │ transformers                                            │ 4.30.2   │
+  │   → loads and runs the HuggingFace model pipeline       │          │
+  │   → pipeline('text-classification', model=..., top_k=…) │          │
+  ├─────────────────────────────────────────────────────────┼──────────┤
+  │ torch                                                   │ 2.10.0   │
+  │   → PyTorch backend for transformer inference           │          │
+  ├─────────────────────────────────────────────────────────┼──────────┤
+  │ nltk                                                    │ 3.9.2    │
+  │   → provides VADER SentimentIntensityAnalyzer           │          │
+  │   → downloads vader_lexicon (~1MB) on first boot        │          │
+  ├─────────────────────────────────────────────────────────┼──────────┤
+  │ asyncpg                                                 │ existing │
+  │   → writes results to transcripts + call_summaries DB   │          │
+  ├─────────────────────────────────────────────────────────┼──────────┤
+  │ fastapi                                                 │ existing │
+  │   → exposes POST /api/ai-suggest endpoint               │          │
+  └─────────────────────────────────────────────────────────┴──────────┘
+
+  MODEL CACHE:
+  - After first boot the model is saved to HuggingFace cache:
+    ~/.cache/huggingface/hub/models--lxyuan--distilbert...
+  - Subsequent restarts load from cache instantly (no re-download)
+  - Can be pre-cached before deployment with:
+    python -c "from transformers import pipeline; pipeline('text-classification',
+    model='lxyuan/distilbert-base-multilingual-cased-sentiments-student')"
+
+  DATABASE TABLES USED:
+  - transcripts       → sentiment column written on every transcript save
+  - call_summaries    → new table, one row per ended call
+
+  ENVIRONMENT VARIABLES:
+  - DATABASE_URL      → Neon PostgreSQL connection string
+  - No additional env vars needed — model runs fully local
+
+--------------------------------------------------------------------------------
+CORE MODULE
+--------------------------------------------------------------------------------
+
+  File: backend/api/sentiment_engine.py
+
+  CLASS: SentimentEngine  (singleton — only one instance ever created)
+
+  METHODS:
+  ┌─────────────────────────────────────────────────────────────────┐
+  │ SentimentEngine.get()                                           │
+  │   Returns the singleton instance. Creates it on first call.     │
+  │   Thread-safe via threading.Lock()                              │
+  ├─────────────────────────────────────────────────────────────────┤
+  │ analyze(text: str) → dict                                       │
+  │   Main entry point. Calls ML → VADER → keyword in order.        │
+  │   Returns:                                                      │
+  │     label      : "positive" | "negative" | "neutral"            │
+  │     score      : float 0.0–1.0 (confidence)                     │
+  │     display    : "HAPPY" | "ANGRY" | "NEUTRAL"                  │
+  │     suggestion : string — actionable hint for the agent          │
+  │     source     : "ml" | "vader" | "keyword"                     │
+  ├─────────────────────────────────────────────────────────────────┤
+  │ score_to_float(label, score) → float (-1.0 to +1.0)            │
+  │   Used by call summary to average sentiment across turns:       │
+  │     positive → +score  (e.g. +0.94)                            │
+  │     negative → -score  (e.g. -0.94)                            │
+  │     neutral  → 0.0                                              │
+  └─────────────────────────────────────────────────────────────────┘
+
+  DISPLAY LABEL MAPPING:
+    positive → HAPPY   (shown in green  #22c55e)
+    negative → ANGRY   (shown in red    #f87171)
+    neutral  → NEUTRAL (shown in gray   #94a3b8)
+
+  SUGGESTION TEMPLATES (randomly selected per label):
+    positive → 2 templates about confirming resolution, upselling
+    negative → 4 templates about empathy, escalation, timelines
+    neutral  → 3 templates about gathering info, next steps
+
+--------------------------------------------------------------------------------
+LIVE SENTIMENT WORKFLOW (real-time during call)
+--------------------------------------------------------------------------------
+
+  Step 1 — Agent speaks into microphone
+    Web Speech API (SpeechRecognition) in the browser captures audio.
+    On each FINAL result (not interim), text is extracted.
+
+  Step 2 — onresult fires in LiveCallPanel.jsx
+    Final transcript text is added to the transcript state array.
+    onNewCallerText(text) callback is called → bubbles up to LiveCallConsole.jsx.
+
+  Step 3 — Debounce in LiveCallConsole.jsx (1200ms)
+    clearTimeout + setTimeout ensure rapid partial results don't spam the API.
+    After 1200ms of silence, fetch fires.
+
+  Step 4 — POST /api/ai-suggest  { text: "..." }
+    Request reaches home_routes.py.
+    asyncio.get_event_loop().run_in_executor() runs SentimentEngine.analyze()
+    in a thread pool (keeps the async event loop unblocked).
+
+  Step 5 — SentimentEngine.analyze(text)
+    If ML pipeline ready → runs DistilBERT inference (~13ms).
+    Else → runs VADER (~0.1ms).
+    Returns { label, score, display, suggestion, source }.
+
+  Step 6 — Response sent to browser
+    { sentiment: "ANGRY", score: 0.94, suggestion: "...", source: "ml" }
+
+  Step 7 — AiAssistPanel.jsx updates (in LiveCallConsole.jsx)
+    setAiInsight(data) → AiAssistPanel renders colored sentiment block:
+      ANGRY  → red background, 😡 icon
+      HAPPY  → cyan background, 😌 icon
+      NEUTRAL → orange background, 😐 icon
+    Also shows the suggestion text below the sentiment label.
+
+  Step 8 — Per-line badge (in LiveCallPanel.jsx)
+    setLastSentiment({ display: data.sentiment }) stored in LiveCallConsole state.
+    Passed as lastSentiment prop to LiveCallPanel.
+    useEffect in LiveCallPanel watches lastSentiment changes.
+    On change: finds the most recent non-system transcript entry and sets
+    its sentimentDisplay field to the received display value.
+    Badge rendered inline: 😊 HAPPY | 😠 ANGRY | 😐 NEUTRAL
+    in a small colored pill next to the transcript text.
+
+  TIMELINE EXAMPLE:
+    00:00.000  Caller: "I am very frustrated with this service"
+    00:00.100  Web Speech API fires final result
+    00:01.300  (after 1200ms debounce) POST /api/ai-suggest fires
+    00:01.313  ML inference completes (13ms)
+    00:01.315  Response: { sentiment:"ANGRY", score:0.944 }
+    00:01.316  AiAssistPanel turns red → "Customer sounds frustrated…"
+    00:01.316  Transcript line gets 😠 ANGRY badge
+
+--------------------------------------------------------------------------------
+TRANSCRIPT SAVE WORKFLOW (per spoken turn, stored in DB)
+--------------------------------------------------------------------------------
+
+  Every time a transcript turn is finalized, the frontend calls:
+  POST /api/webrtc/transcript/save  { session_id, speaker, text }
+
+  In webrtc_routes.py → save_transcript_turn():
+
+  Step 1 — Check if payload.sentiment is already set
+    If the frontend sent a sentiment value → use it directly (trust frontend).
+
+  Step 2 — If sentiment is None (normal case)
+    await asyncio.get_event_loop().run_in_executor(
+        None, SentimentEngine.get().analyze, payload.text
+    )
+    Runs ML/VADER inference in thread pool.
+    Extracts result["label"] → "positive" | "negative" | "neutral"
+
+  Step 3 — INSERT into transcripts table
+    INSERT INTO transcripts (call_id, session_id, speaker, text, sentiment)
+    The sentiment stored is now ML-computed, not keyword-guessed.
+
+  RESULT IN DB:
+    SELECT text, sentiment FROM transcripts ORDER BY id DESC LIMIT 5;
+    → "I am very frustrated..."  | negative
+    → "Thank you so much!"       | positive
+    → "What is the next step?"   | neutral
+    → "This is unacceptable"     | negative
+    → "That resolved my issue"   | positive
+
+--------------------------------------------------------------------------------
+CALL SUMMARY WORKFLOW (runs at call end, fire-and-forget)
+--------------------------------------------------------------------------------
+
+  Triggered by: POST /api/calls/{call_id}/end  (agent clicks "End Call")
+
+  In home_routes.py → end_call_by_id():
+    After setting cc_sessions.status = 'ended':
+    asyncio.create_task(_generate_call_summary(session_id, call_id, duration))
+    → fire-and-forget: does NOT block the API response
+
+  In _generate_call_summary():
+
+  Step 1 — Fetch all transcript rows for this session
+    SELECT speaker, text, sentiment FROM transcripts
+    WHERE session_id=$1 ORDER BY created_at ASC
+
+  Step 2 — Group by speaker
+    speaker_data = { "caller": [...turns...], "agent": [...turns...] }
+
+  Step 3 — Per speaker: compute stats
+    For each speaker:
+      turn_count  = number of turns
+      scores      = [score_to_float(sentiment, 0.7) for each turn]
+      avg_score   = mean of scores  (range -1.0 to +1.0)
+      positive_pct = % of turns labelled positive
+      negative_pct = % of turns labelled negative
+      neutral_pct  = 100 - positive_pct - negative_pct
+      sentiment_label = "positive" if avg_score >= 0.1
+                        "negative" if avg_score <= -0.1
+                        "neutral"  otherwise
+
+  Step 4 — Overall call sentiment
+    all_scores = all individual turn scores across all speakers
+    total_avg  = mean of all_scores
+    overall_label = same threshold logic as above
+
+  Step 5 — INSERT into call_summaries
+    session_id, call_id, num_speakers, speakers (JSONB), avg_sentiment,
+    sentiment_label, total_turns, duration_secs
+
+  EXAMPLE call_summaries ROW:
+    session_id      : "wrtc-a1b2c3d4e5f6"
+    call_id         : 42
+    num_speakers    : 2
+    avg_sentiment   : -0.312  (overall negative)
+    sentiment_label : "negative"
+    total_turns     : 23
+    duration_secs   : 187
+
+    speakers (JSONB):
+    [
+      {
+        "speaker":         "caller",
+        "turn_count":      12,
+        "avg_sentiment":   -0.614,
+        "sentiment_label": "negative",
+        "positive_pct":    8,
+        "negative_pct":    75,
+        "neutral_pct":     17
+      },
+      {
+        "speaker":         "agent",
+        "turn_count":      11,
+        "avg_sentiment":   0.421,
+        "sentiment_label": "positive",
+        "positive_pct":    64,
+        "negative_pct":    9,
+        "neutral_pct":     27
+      }
+    ]
+
+  INTERPRETATION:
+    Caller was mostly negative (frustrated), agent was mostly positive
+    (empathetic/solution-focused). Overall call was negative.
+    This flags the call for supervisor review.
+
+--------------------------------------------------------------------------------
+FRONTEND COMPONENTS INVOLVED
+--------------------------------------------------------------------------------
+
+  LiveCallConsole.jsx
+  ├── Holds aiInsight state  → passed to AiAssistPanel
+  ├── Holds lastSentiment state  → passed to LiveCallPanel
+  ├── handleNewTranscript()  → debounce → POST /api/ai-suggest
+  └── On response: setAiInsight(data) + setLastSentiment({ display })
+
+  AiAssistPanel.jsx
+  ├── Receives aiInsight prop
+  ├── Displays colored block: ANGRY (red) | HAPPY (cyan) | NEUTRAL (orange)
+  ├── Displays suggestion text below label
+  └── Shows "Listening to conversation…" when aiInsight is null
+
+  LiveCallPanel.jsx
+  ├── Receives lastSentiment prop
+  ├── useEffect on lastSentiment → updates last transcript entry's sentimentDisplay
+  └── In transcript render: shows inline badge per line
+      😊 HAPPY   (green pill)
+      😠 ANGRY   (red pill)
+      😐 NEUTRAL (gray pill)
+
+--------------------------------------------------------------------------------
+BACKEND FILES INVOLVED
+--------------------------------------------------------------------------------
+
+  backend/api/sentiment_engine.py    ← CORE — singleton ML engine
+  backend/api/home_routes.py         ← POST /api/ai-suggest (live mode)
+                                     ← _generate_call_summary() (end mode)
+  backend/api/webrtc_routes.py       ← save_transcript_turn() (save mode)
+  backend/api/callcenter/db.py       ← call_summaries table DDL
+  backend/core/lifespan.py           ← startup warm-up trigger
+
+--------------------------------------------------------------------------------
+DATABASE TABLES WRITTEN BY SENTIMENT SYSTEM
+--------------------------------------------------------------------------------
+
+  transcripts.sentiment (VARCHAR 20)
+    Written on every POST /api/webrtc/transcript/save
+    Values: "positive" | "negative" | "neutral"
+    Previously: keyword matching (32 words)
+    Now: ML model inference (DistilBERT / VADER fallback)
+
+  call_summaries (new table — full schema in tables.txt)
+    Written once per call when agent clicks End Call
+    Contains: num_speakers, speakers JSONB, avg_sentiment float,
+              sentiment_label, total_turns, duration_secs
+
+--------------------------------------------------------------------------------
+STARTUP SEQUENCE
+--------------------------------------------------------------------------------
+
+  Server starts (uvicorn)
+       ↓
+  lifespan() runs
+       ↓
+  SentimentEngine.get() called  ← warm-up trigger in lifespan.py
+       ↓
+  SentimentEngine.__init__() runs:
+    Thread 1 (main):  _init_vader() → downloads vader_lexicon (~0.3s) → ready
+    Thread 2 (daemon): _load_model() → loads DistilBERT from HuggingFace cache
+       ↓
+  Server ready log printed
+  VADER is already available for requests
+       ↓
+  ~5-15 seconds later (background thread):
+  ML model fully loaded
+  All subsequent requests use ML model (source: "ml")
+
+  LOG LINES TO VERIFY:
+    [Sentiment] VADER fallback ready            ← appears in first 1s
+    [Sentiment] Engine warm-up initiated…       ← lifespan.py
+    [Sentiment] ML model loaded: lxyuan/…       ← after model loads
+
+--------------------------------------------------------------------------------
+HOW TO VERIFY IT IS WORKING
+--------------------------------------------------------------------------------
+
+  1. TEST ENDPOINT DIRECTLY:
+     curl -X POST http://localhost:8000/api/ai-suggest \
+       -H 'Content-Type: application/json' \
+       -d '{"text":"I am very frustrated with this service"}'
+     Expected: {"sentiment":"ANGRY","score":0.944,"source":"ml",...}
+
+  2. TEST POSITIVE:
+     curl -X POST http://localhost:8000/api/ai-suggest \
+       -H 'Content-Type: application/json' \
+       -d '{"text":"Thank you so much, this is perfect!"}'
+     Expected: {"sentiment":"HAPPY","score":0.988,"source":"ml",...}
+
+  3. CHECK DB AFTER A CALL:
+     SELECT text, sentiment FROM transcripts ORDER BY id DESC LIMIT 10;
+     Should see real ML labels, not all-neutral keyword output.
+
+  4. CHECK CALL SUMMARY:
+     SELECT session_id, num_speakers, avg_sentiment, sentiment_label,
+            speakers FROM call_summaries ORDER BY id DESC LIMIT 1;
+     Should show per-speaker JSONB breakdown after ending a call.
+
+  5. CHECK SOURCE FIELD:
+     First requests within 15s of boot → "source":"vader"
+     After model loads → "source":"ml"
+     If VADER also fails → "source":"keyword"
+
+================================================================================
+END OF FILE
+Generated: 2026-04-18
+================================================================================

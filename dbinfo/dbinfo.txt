@@ -1,0 +1,938 @@
+================================================================================
+  DATABASE MAPPING REPORT — VoiceAiCore
+  Scope: /backend/ + /call-test/src/   |   Ignored: /UI_01/
+  Generated: 2026-04-17
+================================================================================
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  DATABASE OVERVIEW
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  DB-1  PostgreSQL — Call Center (asyncpg pool via DATABASE_URL / Neon)
+        Tables: cc_callers, cc_sessions, agent_states, outbound_queue,
+                admin_config, transcripts
+
+  DB-2  PostgreSQL — Memory/Analytics (psycopg2 via NEON_CONNECTION_STRING)
+        Tables: conversation_turns, call_records, avatar_configs, ai_routing_rules
+
+  DB-3  PostgreSQL — Auth (psycopg2 via DATABASE_URL)
+        Tables: users, password_reset_tokens
+
+  DB-4  SQLite — Local Stores (filesystem)
+        Files:  data/stt_corrections.db  → table: corrections
+                data/long_term_memory.db → tables: customers, call_records
+
+  Total: 13 PostgreSQL tables + 3 SQLite tables = 16 tables
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  CATEGORY 1 — FULLY CONNECTED TO DATABASE
+  (Files that have complete, working DB read/write operations)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+─────────────────────────────────────────────────────────────────────────────
+  BACKEND FILES
+─────────────────────────────────────────────────────────────────────────────
+
+FILE: backend/api/callcenter/db.py
+FEATURE: Call Center Database Access Layer (Central DB Gateway)
+DB: DB-1 (asyncpg / Neon)
+TABLES:
+  → cc_callers      — upsert_caller(): id, email, display_name, phone_number, country_code
+  → cc_sessions     — create_call_log(): session_id, room_id, caller_id, department, status, created_at
+                      update_call_log_status(): status, ended_at, call_duration, agent_id, wait_seconds
+                      get_call_log(): SELECT by session_id OR room_id
+  → agent_states    — set_agent_online/offline(): agent_id, status, department, current_call_session_id
+                      get_available_agent(): SELECT WHERE status='available'
+                      set_agent_busy/available/on_hold(): status transitions
+  → outbound_queue  — add_to_outbound_queue(): call_log_id, user_email, department
+                      complete_outbound(): UPDATE status='completed'
+  → admin_config    — get_config(key): SELECT value WHERE key=?
+                      set_config(key, value): UPSERT
+  → transcripts     — Created in init_db() DDL; schema: id, call_id, session_id,
+                        speaker, text, sentiment, created_at
+TRIGGERS:
+  App startup → init_db() creates all tables if missing
+  Caller joins → upsert_caller() + create_call_log()
+  Call status change → update_call_log_status()
+  Agent login/logout → set_agent_online/offline()
+  Call ends → update_call_log_status(ended/completed)
+  Callback scheduled → add_to_outbound_queue()
+
+────────────────────────────────────────────────────────────────────────────
+
+FILE: backend/api/callcenter/api.py
+FEATURE: Call Center REST API (Caller Auth, Call Initiation, Agent State)
+DB: DB-1 (via db.py functions)
+TABLES:
+  → cc_callers      — POST /cc/auth: reads/creates caller record by email
+  → cc_sessions     — POST /cc/call: creates new session, GET /cc/queue: reads sessions
+  → agent_states    — POST /cc/agent/online, DELETE /cc/agent/offline
+                      POST /cc/agent/accept: updates current_call_session_id
+                      DELETE /cc/call/{session_id}: clears agent session
+  → outbound_queue  — POST /cc/outbound/accept: marks item as being called
+                      POST /cc/outbound/complete: marks callback done
+TRIGGERS:
+  POST /cc/auth           → upsert_caller()
+  POST /cc/call           → create_call_log() + enqueue_caller()
+  POST /cc/agent/online   → set_agent_online()
+  DELETE /cc/agent/offline → set_agent_offline()
+  POST /cc/agent/accept   → set_agent_busy() + dequeue_caller(reason="connected")
+  POST /cc/agent/end-call → dequeue_caller(reason="completed")
+  POST /cc/outbound/accept → complete_outbound()
+
+────────────────────────────────────────────────────────────────────────────
+
+FILE: backend/api/callcenter/queue_engine.py
+FEATURE: Kafka-backed Caller Queue with TTS announcements
+DB: DB-1 (via db.py)
+TABLES:
+  → cc_sessions     — dequeue_caller(): update_call_log_status(abandoned/connected/completed)
+  → outbound_queue  — dequeue_caller(reason="abandoned"): add_to_outbound_queue()
+  → admin_config    — get_config("avg_resolution_seconds"): wait time calculation
+                      get_config("tts_queue_message"): announcement template
+                      get_config("tts_interval_seconds"): loop interval
+                      get_config("ai_agents_enabled"): AI prompt toggle
+TRIGGERS:
+  enqueue_caller()           → reads admin_config for wait time
+  dequeue_caller("abandoned") → writes outbound_queue + update_call_log_status
+  dequeue_caller("connected") → update_call_log_status(status="connected")
+  dequeue_caller("completed") → update_call_log_status(status="completed")
+  _countdown_loop()          → reads admin_config every 60s
+
+────────────────────────────────────────────────────────────────────────────
+
+FILE: backend/api/callcenter/outbound_engine.py
+FEATURE: Outbound Callback Monitor (auto-dials missed callers)
+DB: DB-1 (via db.py)
+TABLES:
+  → agent_states    — get_available_agent(): SELECT WHERE status='available'
+  → outbound_queue  — SELECT pending items WHERE status='pending'
+                      UPDATE status='in_progress' when dialing
+                      complete_outbound() on success
+TRIGGERS:
+  Background asyncio loop every 5s → checks for available agents + pending callbacks
+  Agent comes online → may trigger immediate outbound attempt
+
+────────────────────────────────────────────────────────────────────────────
+
+FILE: backend/api/callcenter/email_scheduler.py
+FEATURE: Missed Call Email Scheduler (DB-backed polling)
+DB: DB-1 (via db.py)
+TABLES:
+  → outbound_queue  — SELECT WHERE status='no_answer' AND scheduler_email_sent IS NULL
+                      UPDATE scheduler_email_sent=NOW() after sending
+TRIGGERS:
+  Background loop → polls outbound_queue every N minutes
+  No-answer call detected → schedules follow-up email via EmailService
+
+────────────────────────────────────────────────────────────────────────────
+
+FILE: backend/api/callcenter/business_hours.py
+FEATURE: Business Hours Configuration (DB-driven open/close logic)
+DB: DB-1 (via db.py)
+TABLES:
+  → admin_config    — load_config_from_db(): reads work_start, work_end,
+                        timezone, work_days, holiday_dates
+                      set_config(): admin updates business hours
+TRIGGERS:
+  App startup       → load_config_from_db()
+  Admin POST request → set_config() + reload
+  is_within_business_hours() → called on every incoming call
+
+────────────────────────────────────────────────────────────────────────────
+
+FILE: backend/api/auth_routes.py
+FEATURE: User Authentication (Register, Login, Password Reset)
+DB: DB-3 (psycopg2 / users table)
+TABLES:
+  → users                 — POST /api/register: INSERT id, name, email, password_hash,
+                              phone_number, country_code, role, is_active, created_at
+                            POST /api/login: SELECT email, password_hash, role, is_active
+                            POST /api/reset-password: UPDATE password_hash
+  → password_reset_tokens — POST /api/forgot-password: INSERT token, email, expires_at
+                            POST /api/reset-password: SELECT + DELETE token
+TRIGGERS:
+  POST /api/register       → INSERT into users
+  POST /api/login          → SELECT + bcrypt verify
+  POST /api/forgot-password → INSERT token + send email
+  POST /api/reset-password  → verify token + UPDATE password_hash
+
+────────────────────────────────────────────────────────────────────────────
+
+FILE: backend/api/superuser_routes.py
+FEATURE: Superuser / Admin Dashboard Statistics API
+DB: DB-1 (asyncpg)
+TABLES:
+  → cc_sessions     — COUNT total, COUNT active (status in connected/queued/ringing),
+                        AVG wait_seconds, department breakdown
+  → agent_states    — COUNT online agents, agent status distribution
+  → outbound_queue  — COUNT pending callbacks, missed calls
+TRIGGERS:
+  GET /api/stats                → aggregate query across cc_sessions + agent_states
+  GET /api/superuser/realtime   → live counts polled every 5s by frontend
+  GET /api/superuser/dashboard  → full dashboard summary
+
+────────────────────────────────────────────────────────────────────────────
+
+FILE: backend/api/home_routes.py
+FEATURE: Call History, Active Calls, Transcripts, Admin Endpoints
+DB: DB-1 (asyncpg via get_pool())
+TABLES:
+  → cc_sessions     — GET /api/calls: SELECT with JOIN cc_callers, ORDER BY created_at DESC
+                        GET /api/calls/active: WHERE status IN (active list) AND ended_at IS NULL
+                          AND created_at > NOW() - 4h
+                        DELETE /api/calls/{id}: DELETE record
+                        POST /api/calls/{id}/end: UPDATE status='ended', ended_at=NOW()
+                        POST /api/calls/{id}/transfer: UPDATE department + status
+                        POST /api/calls/{id}/takeover: UPDATE agent_id
+  → cc_callers      — JOINed in GET /api/calls to get caller_email, caller_name
+  → transcripts     — GET /api/calls/{id}/transcript: SELECT WHERE call_id=?
+                        POST /api/calls/{id}/transcript/save: INSERT speaker, text, sentiment
+  → users           — GET /api/admin/users: SELECT all users
+                        PUT /api/admin/users/{id}/status: UPDATE is_active
+                        PUT /api/admin/users/{id}/role: UPDATE role
+TRIGGERS:
+  GET /api/calls              → full history query
+  GET /api/calls/active       → live calls query
+  POST /api/calls/{id}/end    → status update
+  GET /api/calls/{id}/transcript → transcript fetch
+  POST transcript save        → transcript insert
+  GET /api/admin/stats        → aggregate stats
+  GET /api/admin/users        → user list
+
+────────────────────────────────────────────────────────────────────────────
+
+FILE: backend/api/webrtc_routes.py
+FEATURE: WebRTC / LiveKit Token Generation + Transcript Save
+DB: DB-1 (cc_sessions + transcripts)
+TABLES:
+  → cc_sessions     — save_transcript_turn(): SELECT session_id/room_id to get call_id
+  → transcripts     — save_transcript_turn(): INSERT speaker, text, sentiment, call_id
+TRIGGERS:
+  POST /webrtc/token          → generates LiveKit JWT (no DB write)
+  POST /webrtc/transcript/save → INSERT into transcripts table
+
+────────────────────────────────────────────────────────────────────────────
+
+FILE: backend/memory/pg_memory.py
+FEATURE: pgvector Conversation Memory & Call Records Store
+DB: DB-2 (psycopg2 / NEON_CONNECTION_STRING)
+TABLES:
+  → conversation_turns — save_turn(): INSERT session_id, role, text, lang, embedding (vector)
+                          get_turns(): SELECT recent N turns by session_id
+  → call_records       — save_call_record(): INSERT session_id, turns_json, diarization_json,
+                           sentiment, primary_intent, duration_secs, created_at
+  → avatar_configs     — save_avatar_config(): INSERT/UPDATE voice_stem, company_name,
+                           agent_name, language, generated_prompt
+  → ai_routing_rules   — get_routing_rules(): SELECT all active rules
+TRIGGERS:
+  Each voice turn processed → save_turn()
+  Call ends              → save_call_record() via post_call.py
+  Avatar config updated  → save_avatar_config()
+
+────────────────────────────────────────────────────────────────────────────
+
+FILE: backend/memory/long_term_memory.py
+FEATURE: SQLite Customer History Store (persistent across calls)
+DB: DB-4 (SQLite — data/long_term_memory.db)
+TABLES:
+  → customers    — upsert_customer(): phone, name, lang, total_calls, last_seen,
+                    summary_json, labels_json
+  → call_records — save_call_record(): session_id, phone, sentiment, primary_intent,
+                    duration_secs, summary, created_at
+TRIGGERS:
+  Call ends → save_call_record() + upsert_customer() called from post_call.py
+  Agent queries CRM → get_customer_history(phone)
+
+────────────────────────────────────────────────────────────────────────────
+
+FILE: backend/speech/stt/feedback/correction_store.py
+FEATURE: STT Correction Pairs Storage (improve transcription accuracy)
+DB: DB-4 (SQLite — data/stt_corrections.db)
+TABLES:
+  → corrections — add_correction(): INSERT bad_text, corrected, lang, hits
+                  get_corrections(): SELECT all active corrections
+                  delete_correction(): DELETE by id
+                  increment_hit(): UPDATE hits count
+TRIGGERS:
+  Feedback submitted via API → add_correction()
+  STT postprocessor startup  → get_corrections() to build replace map
+
+────────────────────────────────────────────────────────────────────────────
+
+FILE: backend/speech/stt/feedback/feedback_loop.py
+FEATURE: STT Feedback Loop (auto-detect and record STT errors)
+DB: DB-4 (via correction_store.py)
+TABLES:
+  → corrections — add_correction(): when LLM detects STT error in transcript
+TRIGGERS:
+  LLM response reveals STT misread → feedback_loop.process_pair()
+
+────────────────────────────────────────────────────────────────────────────
+
+FILE: backend/memory/smart_rag.py
+FEATURE: Smart RAG Search (vector similarity search across knowledge bases)
+DB: DB-2 (pgvector via NEON_CONNECTION_STRING)
+TABLES:
+  → RAG_TABLES (pgvector) — cosine similarity search on embedding columns
+                             Returns top-K relevant passages for LLM context
+TRIGGERS:
+  Each user query → embed query → similarity search → inject into LLM prompt
+
+────────────────────────────────────────────────────────────────────────────
+
+FILE: backend/core/post_call.py
+FEATURE: Post-Call Analytics Processor (summary, sentiment, CRM update)
+DB: DB-2 + DB-4 (via pg_memory + long_term_memory)
+TABLES:
+  → call_records       (DB-2) — INSERT full call record with analytics
+  → conversation_turns (DB-2) — referenced for full transcript
+  → customers          (DB-4) — upsert customer profile with call outcome
+TRIGGERS:
+  Call ends / agent hangs up → post_call.process() called from session manager
+
+────────────────────────────────────────────────────────────────────────────
+
+FILE: backend/core/lifespan.py
+FEATURE: Application Lifecycle Manager (startup / shutdown hooks)
+DB: All DBs
+TABLES: Initializes all DB pools and tables via:
+  → init_db()       (DB-1) — creates cc_sessions, cc_callers, agent_states,
+                               outbound_queue, admin_config, transcripts
+  → pg_memory init  (DB-2) — creates conversation_turns, call_records, avatar_configs
+  → long_term_memory(DB-4) — creates SQLite tables
+TRIGGERS:
+  FastAPI startup event → init all DB connections
+  FastAPI shutdown event → close all pools
+
+────────────────────────────────────────────────────────────────────────────
+
+FILE: backend/api/session_routes.py
+FEATURE: Session Analytics API (call replay, session lookup)
+DB: DB-2 (pg_memory)
+TABLES:
+  → call_records       — GET /api/sessions: SELECT all records
+  → conversation_turns — GET /api/sessions/{id}/turns: SELECT by session_id
+TRIGGERS:
+  GET /api/sessions          → fetch all call_records
+  GET /api/sessions/{id}     → fetch specific session turns
+
+────────────────────────────────────────────────────────────────────────────
+
+FILE: backend/api/avatar_routes.py
+FEATURE: Avatar / Voice Persona Configuration API
+DB: DB-2 (pg_memory)
+TABLES:
+  → avatar_configs — GET /api/avatar: SELECT current config
+                     POST /api/avatar: INSERT/UPDATE voice_stem, company_name,
+                       agent_name, language, generated_prompt
+TRIGGERS:
+  GET /api/avatar   → SELECT avatar_configs
+  POST /api/avatar  → UPSERT avatar_configs
+
+─────────────────────────────────────────────────────────────────────────────
+  FRONTEND FILES — Fully Connected
+─────────────────────────────────────────────────────────────────────────────
+
+FILE: call-test/src/pages/Login.jsx
+FEATURE: User Login & Password Reset UI
+DB ENDPOINT: POST /api/login → users table (email, password_hash, role)
+             POST /api/forgot-password → password_reset_tokens table
+             POST /api/reset-password → users table (password_hash update)
+TRIGGER: Form submit → API call → JWT token returned → stored in sessionStorage
+
+FILE: call-test/src/pages/Register.jsx
+FEATURE: New User Registration UI
+DB ENDPOINT: POST /api/register → users table (INSERT name, email, password_hash)
+TRIGGER: Form submit → API call → redirect to login
+
+FILE: call-test/src/components/AiCallWidget.jsx
+FEATURE: Caller-side Browser Call Widget (AI voice call initiation)
+DB ENDPOINT: POST /api/cc/auth → cc_callers (upsert caller)
+             POST /api/cc/call → cc_sessions (create session), outbound_queue
+TRIGGER: "Call Now" button → auth → call initiation
+
+FILE: call-test/src/components/LiveConsole/LiveCallConsole.jsx
+FEATURE: Agent Live Call UI (accept, end, hold calls)
+DB ENDPOINT: POST /api/cc/agent/end-call → cc_sessions (status update)
+             POST /api/cc/outbound/complete → outbound_queue
+TRIGGER: Agent clicks End Call / Complete Callback
+
+FILE: call-test/src/components/agentDashboard/IncomingCallNotification.jsx
+FEATURE: Incoming Call Accept/Reject Banner for Agent
+DB ENDPOINT: POST /api/cc/agent/accept → agent_states + cc_sessions
+TRIGGER: WebSocket event (incoming_call) → agent accepts/rejects
+
+FILE: call-test/src/components/agentDashboard/OutboundCallNotification.jsx
+FEATURE: Outbound Callback Notification for Agent
+DB ENDPOINT: POST /api/cc/outbound/accept → outbound_queue
+             POST /api/cc/outbound/complete → outbound_queue
+TRIGGER: WebSocket event (outbound_call) → agent accepts/completes
+
+FILE: call-test/src/pages/superuser/Dashboard.jsx
+FEATURE: Superuser Overview Dashboard
+DB ENDPOINT: GET /api/superuser/realtime → cc_sessions + agent_states
+             GET /api/stats → cc_sessions aggregate stats
+TRIGGER: Component mount + 5s polling interval
+
+FILE: call-test/src/pages/superuser/Agents.jsx
+FEATURE: Agent Management Table (superuser view)
+DB ENDPOINT: GET /api/superuser/realtime → agent_states (all agents, status)
+TRIGGER: Component mount + polling
+
+FILE: call-test/src/pages/agent/AgentDashboard.jsx
+FEATURE: Agent Dashboard Shell (tab routing, agent online/offline)
+DB ENDPOINT: POST /api/cc/agent/online → agent_states
+             POST /api/cc/agent/offline → agent_states
+TRIGGER: Component mount → agent/online; unmount → agent/offline
+
+FILE: call-test/src/components/IVR/HistoryPanel.jsx
+FEATURE: Call History Table (with transcripts, duration, sentiment)
+DB ENDPOINT: GET /api/calls?limit=50 → cc_sessions JOIN cc_callers + transcripts
+             DELETE /api/calls/{id} → cc_sessions
+             GET /api/calls/{id}/transcript → transcripts
+TRIGGER: Component mount + 5s polling; Delete button click; Transcript button click
+
+FILE: call-test/src/components/IVR/ActiveCallsPanel.jsx
+FEATURE: Live Active Calls Monitor (superuser/admin)
+DB ENDPOINT: GET /api/calls/active → cc_sessions WHERE ended_at IS NULL
+             POST /api/calls/{id}/end → cc_sessions (status=ended)
+             POST /api/calls/{id}/transfer → cc_sessions (department update)
+             POST /api/calls/{id}/takeover → cc_sessions (agent_id update)
+TRIGGER: Component mount + 4s polling interval
+
+FILE: call-test/src/components/agentDashboard/QueueMonitor.jsx
+FEATURE: Call Queue Monitor (department-wise queue view)
+DB ENDPOINT: GET /api/cc/queue → cc_sessions (queued status)
+TRIGGER: Component mount + polling
+
+FILE: call-test/src/pages/user/AiAgentsPage.jsx
+FEATURE: AI Agent Configuration UI (admin_config settings)
+DB ENDPOINT: GET /api/cc/admin/config/get → admin_config table
+             POST /api/cc/admin/config → admin_config table (update)
+TRIGGER: Page load → fetch config; Form save → update config
+
+FILE: call-test/src/hooks/useActiveCalls.js
+FEATURE: Active Calls State Hook (HTTP polling)
+DB ENDPOINT: GET /api/calls/active → cc_sessions
+TRIGGER: 4-second polling interval
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  CATEGORY 2 — PARTIALLY CONNECTED TO DATABASE
+  (Files with some DB work done but gaps remain)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+─────────────────────────────────────────────────────────────────────────────
+  BACKEND FILES
+─────────────────────────────────────────────────────────────────────────────
+
+FILE: backend/core/persona.py
+FEATURE: Agent Persona & Greeting Generator
+CONNECTED: Reads avatar_configs.generated_prompt from DB-2 to build greeting
+NOT CONNECTED: Does not write back persona update logs or A/B test results;
+               company_name and agent_name changes not persisted to DB
+SHOULD CONNECT TO: avatar_configs (for update) + admin_config (for persona toggle)
+
+FILE: backend/agent/ai_worker.py
+FEATURE: AI Agent Processing Worker (per-session LLM pipeline)
+CONNECTED: Reads conversation history via pg_memory.get_turns()
+NOT CONNECTED: Does not directly write session metrics (latency, LLM tokens used);
+               worker errors not logged to DB
+SHOULD CONNECT TO: call_records (for per-turn metadata), admin_config (feature flags)
+
+FILE: backend/agent/session_manager.py
+FEATURE: Session Lifecycle Coordinator
+CONNECTED: Triggers DB writes via callcenter/db.py (status updates)
+NOT CONNECTED: Does not record session transition timestamps; escalation reasons
+               not written to DB
+SHOULD CONNECT TO: cc_sessions (escalated_at, escalation_reason columns)
+
+FILE: backend/routing_ivr/ivr_routes.py
+FEATURE: IVR Menu Tree API
+CONNECTED: Reads admin_config for IVR menu configuration
+NOT CONNECTED: IVR node traversal counts not stored; caller IVR path not recorded;
+               IVR choices not logged per session
+SHOULD CONNECT TO: New table `ivr_logs` (session_id, node_id, choice, timestamp)
+                   OR admin_config for hit counts
+
+FILE: backend/memory/rag_pipeline.py
+FEATURE: RAG Document Pipeline (knowledge base ingestion)
+CONNECTED: Reads pgvector tables for similarity search
+NOT CONNECTED: Document ingestion timestamps, source tracking, and chunk metadata
+               not persisted to DB; no table tracks which docs are indexed
+SHOULD CONNECT TO: New table `rag_documents` (filename, chunk_count, indexed_at, status)
+
+FILE: backend/language/llm_core.py
+FEATURE: LLM Response Generator (core inference)
+CONNECTED: Receives customer context injected from pg_memory (read-side only)
+NOT CONNECTED: LLM response latency, token counts, model used — not written to DB
+SHOULD CONNECT TO: call_records (model_used, latency_ms, tokens_used columns)
+
+FILE: backend/core/state.py
+FEATURE: Global In-Memory Config Cache
+CONNECTED: Loads initial config from admin_config table at startup
+NOT CONNECTED: Config changes made at runtime via API not always written back to DB;
+               acts as in-memory cache with potential stale data
+SHOULD CONNECT TO: admin_config (write-through cache on every set_state() call)
+
+FILE: backend/routing/engine.py
+FEATURE: Call Routing Rules Engine
+CONNECTED: Reads routing rules JSON (data/routing.json) — file-based
+NOT CONNECTED: Rules should be stored in DB for admin edit via UI;
+               routing decision outcomes not logged
+SHOULD CONNECT TO: ai_routing_rules (DB-2) or new admin_config keys;
+                   new table `routing_logs` (session_id, matched_rule, department)
+
+─────────────────────────────────────────────────────────────────────────────
+  FRONTEND FILES
+─────────────────────────────────────────────────────────────────────────────
+
+FILE: call-test/src/pages/user/CallLogsPage.jsx
+FEATURE: User Call History Page
+CONNECTED: Calls /api/call-logs to fetch call history
+NOT CONNECTED: Endpoint path mismatch — backend serves /api/calls not /api/call-logs;
+               call details panel may not show all columns (duration, sentiment)
+SHOULD CONNECT TO: /api/calls (rename frontend call) + /api/calls/{id}/transcript
+
+FILE: call-test/src/pages/user/BillingPage.jsx
+FEATURE: Billing & Credits Management UI
+CONNECTED: Stub endpoint PUT /api/admin/users/{id}/credits exists (returns dummy data)
+NOT CONNECTED: No real billing table or payment system in DB;
+               credits column does not exist in users table
+SHOULD CONNECT TO: New table `billing_records` + credits column in users table
+
+FILE: call-test/src/pages/user/PersonasPage.jsx
+FEATURE: Voice Persona / Avatar Configuration UI
+CONNECTED: Partially calls /api/avatar for config fetch
+NOT CONNECTED: Save/update flow may not reach avatar_configs correctly;
+               voice sample preview not stored
+SHOULD CONNECT TO: avatar_configs (DB-2) — ensure POST /api/avatar works end-to-end
+
+FILE: call-test/src/pages/superuser/BusinessHours.jsx
+FEATURE: Business Hours Configuration UI
+CONNECTED: UI renders form for work_start, work_end, work_days
+NOT CONNECTED: Calls /api/cc/business-hours endpoint which does NOT exist in backend;
+               form submits to void
+SHOULD CONNECT TO: /api/cc/admin/config endpoint (already exists) using keys:
+                   work_start, work_end, timezone, work_days, holiday_dates
+
+FILE: call-test/src/pages/superuser/Scheduling.jsx
+FEATURE: Callback Scheduling UI
+CONNECTED: Displays outbound queue items (partial)
+NOT CONNECTED: No dedicated scheduling endpoints; create/modify/cancel schedule
+               have no backend handlers
+SHOULD CONNECT TO: outbound_queue table via new endpoints:
+                   GET/POST/DELETE /api/cc/scheduling
+
+FILE: call-test/src/pages/superuser/Escalations.jsx
+FEATURE: Escalation Management UI
+CONNECTED: Displays escalated calls list (partial/static)
+NOT CONNECTED: No escalation endpoints in backend; escalation_reason not stored in DB
+SHOULD CONNECT TO: cc_sessions (escalation_reason, escalated_at columns) +
+                   new endpoint GET /api/cc/escalations
+
+FILE: call-test/src/components/agentDashboard/CallTable.jsx
+FEATURE: Agent Call History Table with Transcript Modal
+CONNECTED: Fetches call history via /api/calls; opens transcript modal per call
+NOT CONNECTED: Agent-specific filtering not implemented (shows all calls, not just
+               calls handled by logged-in agent)
+SHOULD CONNECT TO: /api/calls?agent_id={id} — add agent_id filter to backend query
+
+FILE: call-test/src/components/CrmSidebar.jsx
+FEATURE: CRM Customer Info Sidebar (shows caller profile during live call)
+CONNECTED: Displays caller info from cc_callers (passed via props)
+NOT CONNECTED: Does not fetch full customer history from long_term_memory DB;
+               CRM enrichment (total calls, sentiments history) missing
+SHOULD CONNECT TO: New endpoint GET /api/cc/customer/{email} →
+                   queries cc_callers + long_term_memory.customers
+
+FILE: call-test/src/pages/user/KnowledgeBasesPage.jsx
+FEATURE: Knowledge Base Document Management UI
+CONNECTED: UI renders document upload and list
+NOT CONNECTED: No backend API endpoints for knowledge base CRUD;
+               RAG document ingestion not triggered from UI
+SHOULD CONNECT TO: New endpoints: GET/POST/DELETE /api/knowledge-base →
+                   rag_pipeline.py + new `rag_documents` table
+
+FILE: call-test/src/pages/user/VoicesPage.jsx
+FEATURE: Voice Selection & Preview UI
+CONNECTED: Lists available voices (static list in code)
+NOT CONNECTED: Voice selection not persisted to avatar_configs table
+SHOULD CONNECT TO: avatar_configs.voice_stem via PUT /api/avatar
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  CATEGORY 3 — SHOULD BE CONNECTED BUT IS NOT
+  (Files where DB connection is missing and is needed for the feature to work)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+─────────────────────────────────────────────────────────────────────────────
+  BACKEND FILES
+─────────────────────────────────────────────────────────────────────────────
+
+FILE: backend/routing_ivr/call_queue.py
+FEATURE: IVR-side In-Memory Call Queue (older implementation)
+ISSUE: Manages queue entirely in memory (Python dict); no persistence across restart;
+       queue state lost on server crash; no audit trail of queued callers
+SHOULD CONNECT TO: cc_sessions table — persist queue state with status='queued';
+                   read back on startup to restore queue from DB
+
+FILE: backend/routing_ivr/ivr_routes.py (IVR analytics portion)
+FEATURE: IVR Node Hit Counting (for sidebar IVR Activity widget)
+ISSUE: /api/agent/ivr-status returns static mock data; no real hit counts stored
+SHOULD CONNECT TO: New table `ivr_logs` (session_id, node_id, hits, created_at)
+                   OR add ivr_hit_count column to admin_config per node key
+
+FILE: backend/api/callcenter/email_service.py
+FEATURE: Abandoned Call Email Notification
+ISSUE: Sends email but does not log email_sent=true or timestamp to DB;
+       no way to know if email was already sent (risk of duplicate sends)
+SHOULD CONNECT TO: outbound_queue.scheduler_email_sent column (already exists in schema)
+                   UPDATE SET scheduler_email_sent=NOW() after successful send
+
+FILE: backend/core/state.py  (write-back portion)
+FEATURE: Global Config Write-Back
+ISSUE: set_state() updates in-memory dict but does NOT write to admin_config table;
+       config resets to DB value on restart
+SHOULD CONNECT TO: admin_config table — set_config(key, val) on every set_state() call
+
+─────────────────────────────────────────────────────────────────────────────
+  FRONTEND FILES
+─────────────────────────────────────────────────────────────────────────────
+
+FILE: call-test/src/pages/user/AnalyticsPage.jsx
+FEATURE: Call Analytics Graphs & Reports
+ISSUE: Page renders chart containers but makes no API calls for data;
+       all chart data is placeholder/mock
+SHOULD CONNECT TO: GET /api/stats (already exists) + GET /api/superuser/realtime
+                   for real call volumes, duration averages, sentiment breakdown
+
+FILE: call-test/src/pages/superuser/Reports.jsx
+FEATURE: Downloadable Reports / Export
+ISSUE: Export buttons present but no backend export endpoint;
+       no CSV/PDF generation API exists
+SHOULD CONNECT TO: New endpoint GET /api/reports/export?from=&to=&type= →
+                   queries cc_sessions + transcripts, returns CSV
+
+FILE: call-test/src/components/agentDashboard/Sidebar.jsx (IVRCard section)
+FEATURE: IVR Activity Widget in Agent Sidebar
+ISSUE: Calls GET /api/agent/ivr-status but backend returns mock data;
+       no real IVR traversal counts stored
+SHOULD CONNECT TO: ivr_logs table (to be created) via /api/agent/ivr-status endpoint
+
+FILE: call-test/src/pages/user/BatchesPage.jsx
+FEATURE: Batch Call Campaign Management
+ISSUE: No backend endpoints; no DB table for batches;
+       UI is completely unconnected (stub page)
+SHOULD CONNECT TO: New table `batch_campaigns` (id, name, target_list, status, created_at)
+                   + endpoints: GET/POST/DELETE /api/batches
+
+FILE: call-test/src/pages/user/PathwaysPage.jsx
+FEATURE: Call Flow / Pathway Builder
+ISSUE: No backend; no DB storage for pathway definitions;
+       visual builder saves nothing
+SHOULD CONNECT TO: New table `pathways` (id, name, flow_json, created_at)
+                   + endpoints: GET/POST/PUT/DELETE /api/pathways
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  CATEGORY 4 — NO DATABASE CONNECTION REQUIRED
+  (Files that are pure processing, utility, or UI-only — no DB needed)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+─────────────────────────────────────────────────────────────────────────────
+  BACKEND FILES
+─────────────────────────────────────────────────────────────────────────────
+
+FILE: backend/audio/merger.py
+FEATURE: Audio Stream Merger (combines agent + caller audio tracks)
+REASON: Pure signal processing — numpy array operations only
+
+FILE: backend/audio/converter.py
+FEATURE: Audio Format Converter (PCM ↔ WAV ↔ OGG)
+REASON: Stateless codec operations; no persistence needed
+
+FILE: backend/audio/vad.py / call_vad.py / barge_in.py
+FEATURE: Voice Activity Detection & Barge-In Detection
+REASON: Real-time audio frame classification; no state to store
+
+FILE: backend/audio/preprocessor.py
+FEATURE: Audio Preprocessing (noise reduction, normalization)
+REASON: In-pipeline signal processing; no DB writes needed
+
+FILE: backend/language/ner_extractor.py
+FEATURE: Named Entity Recognition (extracts names, dates, locations from speech)
+REASON: NLP inference only; results injected into LLM context, not stored separately
+
+FILE: backend/language/interruption_detector.py
+FEATURE: Speaker Interruption Detection
+REASON: Real-time audio event; state managed in session memory only
+
+FILE: backend/language/language_router.py
+FEATURE: Language Detection & Routing
+REASON: Audio classification; result passed as session variable, not persisted
+
+FILE: backend/language/llm/gemini_responder.py
+FEATURE: Google Gemini LLM Client
+REASON: External API wrapper; stateless per-request
+
+FILE: backend/language/llm/ollama_responder.py
+FEATURE: Ollama Local LLM Client
+REASON: External API wrapper; stateless per-request
+
+FILE: backend/language/llm/responder.py
+FEATURE: LLM Responder Dispatcher
+REASON: Routes to Gemini/Ollama based on config; no DB needed
+
+FILE: backend/language/llm/llm_router.py
+FEATURE: LLM Provider Router
+REASON: Config-based routing logic; stateless
+
+FILE: backend/speech/stt/postprocessor.py
+FEATURE: STT Output Postprocessor (corrections, formatting)
+REASON: Uses in-memory correction map loaded at startup; no runtime DB writes
+
+FILE: backend/speech/stt/transcriber.py
+FEATURE: Core Speech-to-Text Engine (Whisper / Deepgram)
+REASON: ML model inference; stateless per audio chunk
+
+FILE: backend/speech/tts_client.py
+FEATURE: Text-to-Speech Client (Piper / ElevenLabs)
+REASON: Streams audio bytes; no DB state
+
+FILE: backend/speech/voice_persona/cloner_client.py
+FEATURE: Voice Cloning Client
+REASON: External API calls for voice synthesis; stateless
+
+FILE: backend/speech/voice_persona/persona_engine.py
+FEATURE: Voice Persona Engine (maps persona to voice)
+REASON: In-memory config; loaded from file/DB at startup only
+
+FILE: backend/speech/voice_persona/persona_config.py
+FEATURE: Persona Configuration Loader
+REASON: File/env-based config; read-only
+
+FILE: backend/services/diarization_client.py
+FEATURE: Speaker Diarization Client
+REASON: External service calls; output passed to pg_memory via post_call
+
+FILE: backend/core/decorator.py
+FEATURE: Retry / Error Decorator Utilities
+REASON: Pure Python decorators; no DB
+
+FILE: backend/core/logger.py
+FEATURE: Centralized Logging Configuration
+REASON: File/stdout logging only; no DB writes
+
+FILE: backend/core/greeting_loader.py
+FEATURE: Greeting Template Loader
+REASON: Reads from /greetings/*.txt files; no DB
+
+FILE: backend/routing/rules.py
+FEATURE: Routing Rules Data Structures
+REASON: Python dataclasses for rule objects; no DB interaction
+
+FILE: backend/routing_ivr/ollama_classify.py
+FEATURE: Ollama-based Intent Classifier for IVR
+REASON: ML inference; stateless classification
+
+FILE: backend/memory/haup_rag_client.py
+FEATURE: External HAUP RAG API Client
+REASON: HTTP client wrapper for external RAG service; no local DB
+
+FILE: backend/memory/vector_store.py
+FEATURE: (Legacy) In-Memory Vector Store
+REASON: Replaced by pg_memory; no DB calls (in-memory dict operations)
+
+FILE: backend/api/callcenter/kafka_config.py
+FEATURE: Kafka Configuration Constants
+REASON: Constants file only (broker URLs, topic names)
+
+FILE: backend/api/callcenter/schemas.py
+FEATURE: Pydantic Schemas for Queue Events
+REASON: Data models only; no DB interaction
+
+FILE: backend/api/callcenter/event_hub.py
+FEATURE: In-Memory WebSocket Event Broadcaster
+REASON: Publishes events to connected WebSocket clients; no DB state
+
+FILE: backend/api/callcenter/email_service.py (send portion)
+FEATURE: Email Sender (SMTP)
+REASON: SMTP send only; no DB reads (email content passed as param)
+
+FILE: backend/app.py
+FEATURE: Core Voice AI WebSocket Handler (call session entry point)
+REASON: Orchestrates session flow; all DB calls delegated to db.py / pg_memory
+
+FILE: backend/main.py
+FEATURE: FastAPI App Entry Point & Router Registration
+REASON: App factory; no DB calls directly
+
+─────────────────────────────────────────────────────────────────────────────
+  FRONTEND FILES — No DB Needed
+─────────────────────────────────────────────────────────────────────────────
+
+FILE: call-test/src/components/sections/Hero.jsx
+FEATURE: Landing Page Hero Section (marketing)
+REASON: Static content only
+
+FILE: call-test/src/components/sections/Features.jsx
+FEATURE: Product Features Section (marketing)
+REASON: Static content only
+
+FILE: call-test/src/components/sections/HowItWorks.jsx
+FEATURE: How It Works Section (marketing)
+REASON: Static content only
+
+FILE: call-test/src/components/sections/Pricing.jsx
+FEATURE: Pricing Plans Section (marketing)
+REASON: Static content only
+
+FILE: call-test/src/context/CallContext.jsx
+FEATURE: Global Call State Context Provider
+REASON: React context; manages in-memory call state (isActive, roomName)
+
+FILE: call-test/src/context/AuthContext.jsx
+FEATURE: Auth State Context Provider
+REASON: Manages JWT from sessionStorage; no direct DB calls (delegates to Login)
+
+FILE: call-test/src/services/api.js
+FEATURE: Axios API Client (base URL + auth interceptor)
+REASON: HTTP client configuration; no DB interaction
+
+FILE: call-test/src/services/callApiService.js
+FEATURE: Call API Helper Functions
+REASON: Wraps fetch calls to backend; no direct DB
+
+FILE: call-test/src/hooks/useCall.js
+FEATURE: LiveKit Room Connection Hook
+REASON: WebRTC/LiveKit SDK calls; no DB
+
+FILE: call-test/src/hooks/useAgentDashboard.js
+FEATURE: Agent Dashboard State Hook
+REASON: In-memory polling state; DB calls delegated to API endpoints
+
+FILE: call-test/src/components/agentDashboard/Sidebar.jsx
+FEATURE: Agent Dashboard Sidebar Navigation
+REASON: Pure navigation/layout component (IVRCard makes API call, handled by backend)
+
+FILE: call-test/src/pages/Index.jsx / App.jsx
+FEATURE: App Entry Point & Route Definitions
+REASON: Router config only; no DB
+
+FILE: call-test/src/components/layout/*.jsx (Navbar, Footer, etc.)
+FEATURE: Layout Shell Components
+REASON: Pure UI layout; no data fetching
+
+FILE: call-test/src/components/agentDashboard/BroadcastPanel.jsx
+FEATURE: Broadcast Message Composer (send TTS to queue)
+REASON: Sends text to TTS engine via WebSocket; no DB write (broadcast is ephemeral)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  UNUSED / DEAD CODE FILES
+  (Files present in codebase but not actively used or referenced)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+BACKEND:
+
+  backend/routing_ivr/call_queue.py
+    → Replaced by backend/api/callcenter/queue_engine.py (Kafka-backed)
+    → Still imported in ivr_routes.py but queue_engine.py is the live system
+
+  backend/routing_ivr/email_service.py
+    → Replaced by backend/api/callcenter/email_service.py
+    → Old version with no DB write-back; no longer referenced in active flow
+
+  backend/memory/vector_store.py
+    → Replaced by pg_memory.py (pgvector on Neon)
+    → In-memory dict approach; no external DB; superseded
+
+FRONTEND:
+
+  call-test/src/pages/GreetAi.jsx
+    → Greeting AI test page; no route registered in App.jsx; orphaned
+
+  call-test/src/pages/ConferenceJoin.jsx
+    → Conference join UI; no active conference feature implemented in backend
+
+  call-test/src/pages/user/BroadcastListener.jsx
+    → Broadcast listener for callers; feature incomplete; not routed
+
+  call-test/src/components/dashboard/AIChatBox.jsx
+    → AI chat sidebar; not mounted in any current layout
+
+  call-test/src/components/LiveConsole/AiAssistPanel.jsx
+    → AI assist side panel; references undefined endpoints; not mounted
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  NON-FUNCTIONAL / MISSING BACKEND FILES
+  (Frontend features that have no .py backend implementation)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  FEATURE: Business Hours UI  (BusinessHours.jsx)
+  MISSING: No endpoint GET/POST /api/cc/business-hours
+  STATUS:  business_hours.py exists in backend but no REST API exposes it;
+           frontend can't read or update business hours via the expected path
+
+  FEATURE: Scheduling / Outbound Management (Scheduling.jsx)
+  MISSING: No endpoints GET/POST/DELETE /api/cc/scheduling
+  STATUS:  outbound_queue table exists; no scheduling CRUD API
+
+  FEATURE: Escalation Management (Escalations.jsx)
+  MISSING: No GET /api/cc/escalations endpoint; no escalation columns in cc_sessions
+  STATUS:  Escalations UI is stub with no backend
+
+  FEATURE: Reports / Export (Reports.jsx)
+  MISSING: No GET /api/reports/export endpoint
+  STATUS:  Data exists in DB but no export generation code
+
+  FEATURE: Batch Campaigns (BatchesPage.jsx)
+  MISSING: No batch_campaigns table; no /api/batches endpoints
+  STATUS:  UI stub — entirely unimplemented
+
+  FEATURE: Pathway Builder (PathwaysPage.jsx)
+  MISSING: No pathways table; no /api/pathways endpoints
+  STATUS:  Visual builder saves nothing; entirely unimplemented
+
+  FEATURE: Knowledge Base Management (KnowledgeBasesPage.jsx)
+  MISSING: No /api/knowledge-base CRUD endpoints
+  STATUS:  rag_pipeline.py exists but has no REST API surface
+
+  FEATURE: IVR Hit Count Analytics (Sidebar IVRCard + ivr_routes.py)
+  MISSING: /api/agent/ivr-status returns mock data; no ivr_logs table
+  STATUS:  Widget shows fake numbers
+
+  FEATURE: CRM Customer History Sidebar (CrmSidebar.jsx)
+  MISSING: No GET /api/cc/customer/{email} endpoint
+  STATUS:  long_term_memory.db has the data but no API exposes it
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SUMMARY COUNTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  BACKEND (95 files analyzed):
+    Category 1 — Fully Connected:        18 files
+    Category 2 — Partially Connected:     8 files
+    Category 3 — Should Be Connected:     4 files
+    Category 4 — No DB Needed:           40 files
+    Unused / Dead Code:                   3 files
+    Non-functional (missing .py backend): 9 features
+
+  FRONTEND (100 files analyzed):
+    Category 1 — Fully Connected:        15 files
+    Category 2 — Partially Connected:    10 files
+    Category 3 — Should Be Connected:     5 files
+    Category 4 — No DB Needed:           20 files
+    Unused / Dead Code:                   5 files
+
+  TOTAL DB TABLES: 16 (13 PostgreSQL + 3 SQLite)
+  BROKEN API ENDPOINTS (called by frontend, missing in backend): 9 endpoints
+
+================================================================================
+  END OF REPORT
+================================================================================
